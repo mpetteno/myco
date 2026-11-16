@@ -5,7 +5,7 @@ migration. See [database setup](saved-gardens.md). Each migration is applied onc
 
 ## Using sharing
 
-Open a garden and choose **More → Sharing**. The owner can enter another user's
+Open a garden and choose **Edit garden → Share garden**. The owner can enter another user's
 email to grant editing access immediately. The account must already exist and
 its email must be confirmed. Email matching ignores case and surrounding spaces.
 Adding an existing editor again has no effect. The owner always retains access.

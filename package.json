@@ -7,7 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
-    "test": "node --test tests/auth/*.test.mjs tests/gardens/*.test.mjs",
+    "test": "node --test tests/i18n/*.test.mjs tests/auth/*.test.mjs tests/appearance/*.test.mjs tests/gardens/*.test.mjs tests/catalogue/*.test.mjs tests/planting/*.test.mjs tests/bed-editor/*.test.mjs tests/mulch/*.test.mjs tests/history/*.test.mjs",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
@@ -24,6 +24,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.3.0",
+    "jsdom": "31.0.0",
     "tailwindcss": "4.3.5",
     "typescript": "7.0.2",
     "vite": "8.3.8"

@@ -11,7 +11,7 @@ export function Button({ variant = 'primary', ...props }: ButtonProps) {
   return (
     <button
       {...props}
-      className={`min-h-12 w-full cursor-pointer rounded-lg px-3 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600 disabled:cursor-not-allowed disabled:opacity-50 ${colors[variant]}`}
+      className={`min-h-12 w-full cursor-pointer rounded-lg px-3 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600 disabled:cursor-not-allowed disabled:opacity-50 aria-pressed:border-green-700 aria-pressed:bg-green-50 dark:aria-pressed:border-green-400 dark:aria-pressed:bg-green-950 dark:aria-pressed:text-green-300 ${colors[variant]}`}
     />
   );
 }

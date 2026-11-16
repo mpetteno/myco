@@ -1,17 +1,19 @@
 import { useRef, useState } from 'react';
 import { bedsOverlap, findFreePosition, isInsideGarden } from '../beds/bed';
-import type { Bed, BedBounds, BedDetails } from '../beds/bed';
+import type { Bed, BedBounds, BedDetails, BedCopy, BedPlans } from '../beds/bed';
 import { getBedMovePosition } from '../beds/bedMovement';
 import type { BedPosition } from '../beds/bedMovement';
 import { canResizeBed } from '../beds/bedResize';
 import { getPastedBed } from '../beds/bedOperations';
 import type { GardenDimensions } from './garden';
 import type { GardenDocument } from '../gardens/gardenDocument';
+import { plantingAreasFit } from '../planting/plantingPlan';
+import { previewPlanting } from '../planting/plantingGeometry';
+import { mulchAreasFit, validateMulchPlan } from '../mulch/mulchPlan';
 
 export function useGardenLayout(initial: GardenDocument, onChange: (document: GardenDocument) => void) {
   const [document, setDocument] = useState(initial);
   const snapshot = useRef(initial);
-  const nextBedId = useRef(1);
 
   function commit(next: GardenDocument) {
     snapshot.current = next;
@@ -20,8 +22,7 @@ export function useGardenLayout(initial: GardenDocument, onChange: (document: Ga
   }
   function setBeds(beds: Bed[]) { commit({ ...snapshot.current, beds }); }
   function nextId() {
-    while (snapshot.current.beds.some((bed) => bed.id === `bed-${nextBedId.current}`)) nextBedId.current++;
-    return `bed-${nextBedId.current++}`;
+    return crypto.randomUUID();
   }
 
   function applyDimensions(next: GardenDimensions): string | null {
@@ -38,6 +39,8 @@ export function useGardenLayout(initial: GardenDocument, onChange: (document: Ga
 
     if (current) {
       const updated: Bed = { ...current, ...details };
+      if (!plantingAreasFit(updated.plantingPlan, updated)) return 'This size would put a planting area outside the bed. Edit or clear its planting plan first.';
+      if (!mulchAreasFit(updated.mulchPlan, updated)) return 'This size would put a mulch area outside the bed. Resize or remove the mulch area first.';
       if (!isInsideGarden(updated, dimensions)) return 'This bed would extend outside the garden. Choose smaller dimensions.';
       if (beds.some((bed) => bed.id !== bedId && bedsOverlap(updated, bed))) {
         return 'This size would overlap another bed. Choose smaller dimensions.';
@@ -70,7 +73,7 @@ export function useGardenLayout(initial: GardenDocument, onChange: (document: Ga
     }));
   }
 
-  function pasteBed(copied: BedDetails): Bed | null {
+  function pasteBed(copied: BedCopy): Bed | null {
     const { dimensions, beds } = snapshot.current;
     const pasted = getPastedBed(copied, dimensions, beds, nextId());
     if (!pasted) return null;
@@ -89,5 +92,26 @@ export function useGardenLayout(initial: GardenDocument, onChange: (document: Ga
     return null;
   }
 
-  return { ...document, applyDimensions, saveBed, moveBed, resizeBed, pasteBed, deleteBed, renameGarden };
+  function saveBedPlan(bedId: string, plans: BedPlans): string | null {
+    const bed = snapshot.current.beds.find((item) => item.id === bedId);
+    if (!bed) return 'Select a bed first.';
+    if (plans.plantingPlan) {
+      const preview = previewPlanting(plans.plantingPlan, bed);
+      if (preview.error) return preview.error;
+      if (preview.points.length === 0) return 'No plants fit these areas. Change their size or spacing.';
+    }
+    if (plans.mulchPlan) {
+      const error = validateMulchPlan(plans.mulchPlan, bed);
+      if (error) return error;
+    }
+    setBeds(snapshot.current.beds.map((item) => {
+      if (item.id !== bedId) return item;
+      const { plantingPlan: previous, mulchPlan: previousMulch, ...details } = item;
+      return { ...details, ...(plans.plantingPlan ? { plantingPlan: plans.plantingPlan } : {}),
+        ...(plans.mulchPlan ? { mulchPlan: plans.mulchPlan } : {}) };
+    }));
+    return null;
+  }
+
+  return { ...document, adopt: (next: GardenDocument) => { snapshot.current=next;setDocument(next); }, applyDimensions, saveBed, moveBed, resizeBed, pasteBed, deleteBed, renameGarden, saveBedPlan };
 }

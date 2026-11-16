@@ -3,6 +3,8 @@ import type { GardenDimensions } from '../garden/garden';
 import { bedsOverlap, isInsideGarden } from './bed';
 import type { Bed } from './bed';
 import type { BedPosition } from './bedMovement';
+import { plantingAreasFit } from '../planting/plantingPlan';
+import { mulchAreasFit } from '../mulch/mulchPlan';
 
 export const RESIZE_HANDLES = [
   'top-left', 'top-middle', 'top-right', 'middle-left',
@@ -23,6 +25,8 @@ export function canResizeBed(bed: Bed, garden: GardenDimensions, beds: Bed[]) {
   return values.every((value) => Number.isSafeInteger(value) && value % GRID_SIZE_CM === 0)
     && bed.widthCm >= GRID_SIZE_CM && bed.lengthCm >= GRID_SIZE_CM
     && isInsideGarden(bed, garden)
+    && plantingAreasFit(bed.plantingPlan, bed)
+    && mulchAreasFit(bed.mulchPlan, bed)
     && !beds.some((other) => other.id !== bed.id && bedsOverlap(bed, other));
 }
 

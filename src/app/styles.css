@@ -1,1 +1,76 @@
 @import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Oyster, birch and bark: warm surfaces and readable neutral text. */
+@theme {
+  --color-white: #fffcf6;
+  --color-stone-50: #f7f2e9;
+  --color-stone-100: #eee4d5;
+  --color-stone-200: #e2d4c0;
+  --color-stone-300: #cfbda4;
+  --color-stone-400: #ab9a83;
+  --color-stone-500: #867662;
+  --color-stone-600: #675a4b;
+  --color-stone-700: #51463a;
+  --color-stone-800: #3b3229;
+  --color-stone-900: #28221c;
+  --color-stone-950: #1b1814;
+
+  /* Moss and fern: primary actions, selection and completed work. */
+  --color-green-50: #f0f4e9;
+  --color-green-100: #e2ebd8;
+  --color-green-200: #d0dfbf;
+  --color-green-300: #b3cda3;
+  --color-green-400: #91b486;
+  --color-green-500: #6f9568;
+  --color-green-600: #567b55;
+  --color-green-700: #466548;
+  --color-green-800: #365039;
+  --color-green-900: #273c2c;
+  --color-green-950: #1b271d;
+
+  /* Mushroom caps and clay: destructive actions and errors. */
+  --color-red-50: #fcf0ea;
+  --color-red-100: #f5ddd1;
+  --color-red-200: #eec2b1;
+  --color-red-300: #e7aa96;
+  --color-red-400: #da927d;
+  --color-red-500: #c97760;
+  --color-red-600: #ad5543;
+  --color-red-700: #923f32;
+  --color-red-800: #77372d;
+  --color-red-900: #512b24;
+  --color-red-950: #311e19;
+
+  /* Chanterelle ochre: warnings and distance to neighbours. */
+  --color-amber-50: #fcf4e5;
+  --color-amber-100: #f6e7c2;
+  --color-amber-200: #ead29a;
+  --color-amber-300: #ddba70;
+  --color-amber-400: #cda04e;
+  --color-amber-500: #b68939;
+  --color-amber-600: #976d2e;
+  --color-amber-700: #7d5427;
+  --color-amber-800: #644325;
+  --color-amber-900: #463120;
+  --color-amber-950: #2c2118;
+
+  /* Cool lichen: planned work, distinct from completed moss-green records. */
+  --color-blue-50: #edf5f6;
+  --color-blue-100: #dcebed;
+  --color-blue-200: #bfd9dd;
+  --color-blue-300: #9ec5c7;
+  --color-blue-400: #8eb7be;
+  --color-blue-500: #729da7;
+  --color-blue-600: #527e8a;
+  --color-blue-700: #38616d;
+  --color-blue-800: #304e58;
+  --color-blue-900: #273c43;
+  --color-blue-950: #1b282e;
+}
+
+@layer base {
+  html { background-color: var(--color-stone-50); }
+  html[data-theme="dark"] { background-color: var(--color-stone-950); }
+}

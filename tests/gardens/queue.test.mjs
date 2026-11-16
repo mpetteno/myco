@@ -60,3 +60,11 @@ test('a version conflict keeps unsaved edits and exposes reload feedback', async
   assert.equal(queue.getSnapshot().conflict, true);
   assert.equal(queue.getSnapshot().message, 'Changed elsewhere');
 });
+
+test('a completed work result advances the save base before subsequent edits',async()=>{
+  const calls=[];
+  const queue=new GardenSaveQueue(initial,async(current,next)=>{calls.push(current.version);return {...current,...next,version:current.version+1};},()=>{});
+  queue.adopt({...initial,version:5,name:'Completed work'});
+  queue.enqueue(document('Next edit'));await queue.flush();
+  assert.deepEqual(calls,[5]);assert.equal(queue.getCurrent().version,6);
+});

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import type { Bed, BedDetails } from './bed';
+import type { Bed, BedCopy } from './bed';
 import { isTextEditingEvent } from '../../shared/keyboard/isTextEditingEvent';
 
 type BedClipboardOptions = {
   selectedBed?: Bed;
-  onPaste: (copied: BedDetails) => Bed | null;
+  onPaste: (copied: BedCopy) => Bed | null;
   onSelect: (id: string) => void;
   enabled?: boolean;
 };
@@ -12,13 +12,14 @@ type BedClipboardOptions = {
 export type BedClipboardFeedback = { text: string; error: boolean };
 
 export function useBedClipboard({ selectedBed, onPaste, onSelect, enabled = true }: BedClipboardOptions) {
-  const [copiedBed, setCopiedBed] = useState<BedDetails | null>(null);
+  const [copiedBed, setCopiedBed] = useState<BedCopy | null>(null);
   const [feedback, setFeedback] = useState({ text: '', error: false });
 
   function copy() {
     if (!selectedBed) return;
-    const { name, widthCm, lengthCm } = selectedBed;
-    setCopiedBed({ name, widthCm, lengthCm });
+    const { name, widthCm, lengthCm, plantingPlan, mulchPlan } = selectedBed;
+    setCopiedBed({ name, widthCm, lengthCm, ...(plantingPlan ? { plantingPlan: structuredClone(plantingPlan) } : {}),
+      ...(mulchPlan ? { mulchPlan: structuredClone(mulchPlan) } : {}) });
     setFeedback({ text: `Copied “${name}”.`, error: false });
   }
 

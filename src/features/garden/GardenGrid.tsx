@@ -1,3 +1,4 @@
+import { canvasPalette } from '../appearance/canvasPalette';
 import { useMemo } from 'react';
 import { Shape } from 'react-konva';
 import { GRID_SIZE_CM } from './garden';
@@ -6,21 +7,25 @@ import type { GardenDimensions } from './garden';
 type GardenGridProps = GardenDimensions & {
   pixelsPerCm: number;
   dark: boolean;
+  surface?: 'garden' | 'bed';
 };
 
-export function GardenGrid({ widthCm, lengthCm, pixelsPerCm, dark }: GardenGridProps) {
+export function GardenGrid({ widthCm, lengthCm, pixelsPerCm, dark, surface = 'garden' }: GardenGridProps) {
   const tile = useMemo(() => {
+    const colors = canvasPalette(dark);
     // A repeating tile keeps the grid cheap even for large gardens.
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = 64;
     const context = canvas.getContext('2d')!;
-    context.fillStyle = dark ? '#163b28' : '#dcebd5';
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.strokeStyle = dark ? '#356348' : '#abc69f';
+    if (surface === 'garden') {
+      context.fillStyle = colors.garden;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    context.strokeStyle = surface === 'bed' ? colors.soilGrid : colors.gardenGrid;
     context.lineWidth = Math.min(16, 0.6 * canvas.width / (GRID_SIZE_CM * pixelsPerCm));
     context.strokeRect(0, 0, canvas.width, canvas.height);
     return canvas;
-  }, [pixelsPerCm, dark]);
+  }, [pixelsPerCm, dark, surface]);
 
   return (
     <Shape

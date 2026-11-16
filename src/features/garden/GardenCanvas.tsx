@@ -1,3 +1,4 @@
+import { canvasPalette } from '../appearance/canvasPalette';
 import { Layer, Rect, Stage } from 'react-konva';
 import { useDarkMode } from '../../shared/hooks/useDarkMode';
 import { useElementSize } from '../../shared/hooks/useElementSize';
@@ -15,12 +16,15 @@ type GardenCanvasProps = {
   onResizeBed: (bedId: string, bounds: BedBounds) => void;
   selectedBedId: string | null;
   onSelectBed: (id: string | null) => void;
+  onEditBed: (id: string) => void;
   onSetup: () => void;
+  readOnly?: boolean; editableBedId?: string;
 };
 
-export function GardenCanvas({ dimensions, beds, onMoveBed, onResizeBed, selectedBedId, onSelectBed, onSetup }: GardenCanvasProps) {
+export function GardenCanvas({ dimensions, beds, onMoveBed, onResizeBed, selectedBedId, onSelectBed, onEditBed, onSetup, editableBedId, readOnly = false }: GardenCanvasProps) {
   const { ref, sizePx } = useElementSize();
   const dark = useDarkMode();
+  const colors = canvasPalette(dark);
   const view = dimensions ? getGardenViewport(dimensions, sizePx) : null;
 
   return (
@@ -29,7 +33,7 @@ export function GardenCanvas({ dimensions, beds, onMoveBed, onResizeBed, selecte
         className="h-full min-h-0 w-full overflow-hidden bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-green-600 dark:bg-stone-950">
         {dimensions && view ? (
           <Stage width={sizePx.width} height={sizePx.height}
-            className="touch-none select-none cursor-grab active:cursor-grabbing"
+            className={`touch-none select-none ${readOnly ? '' : 'cursor-grab active:cursor-grabbing'}`}
             onClick={(event) => { if (event.target === event.target.getStage()) onSelectBed(null); }}
             onTap={(event) => { if (event.target === event.target.getStage()) onSelectBed(null); }}>
             <Layer
@@ -37,11 +41,12 @@ export function GardenCanvas({ dimensions, beds, onMoveBed, onResizeBed, selecte
               scaleX={view.pixelsPerCm} scaleY={view.pixelsPerCm}>
               <GardenGrid {...dimensions} pixelsPerCm={view.pixelsPerCm} dark={dark} />
               <Rect width={dimensions.widthCm} height={dimensions.lengthCm}
-                stroke={dark ? '#72a37a' : '#54794a'} strokeWidth={1.5} strokeScaleEnabled={false}
+                stroke={colors.gardenBorder} strokeWidth={1.5} strokeScaleEnabled={false}
                 listening={false} />
               <BedDrawing beds={beds} garden={dimensions} pixelsPerCm={view.pixelsPerCm} dark={dark}
+                readOnly={readOnly} editableBedId={editableBedId}
                 viewRotationDeg={view.rotationDeg}
-                selectedBedId={selectedBedId} onSelectBed={onSelectBed}
+                selectedBedId={selectedBedId} onSelectBed={onSelectBed} onOpenBed={onEditBed}
                 onMoveBed={onMoveBed} onResizeBed={onResizeBed} />
             </Layer>
           </Stage>

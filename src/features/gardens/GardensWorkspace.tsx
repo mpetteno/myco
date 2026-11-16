@@ -7,12 +7,16 @@ import { AuthShell } from '../auth/AuthShell';
 import { GardenPage } from '../garden/GardenPage';
 import { GardensPicker } from './GardensPicker';
 import { useGardens } from './useGardens';
+import { PlantCataloguePanel } from '../catalogue/PlantCataloguePanel';
+import { MulchCataloguePanel } from '../mulch-catalogue/MulchCataloguePanel';
 
 export function GardensWorkspace({ user }: { user: User }) {
   const store = useGardens(user.id);
   const [picking, setPicking] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [changing, setChanging] = useState(false);
+  const [catalogueOpen, setCatalogueOpen] = useState(false);
+  const [mulchOpen, setMulchOpen] = useState(false);
 
   return (
     <>
@@ -31,6 +35,8 @@ export function GardensWorkspace({ user }: { user: User }) {
             <Button variant="secondary" onClick={store.retry}>Refresh gardens</Button>
           </>}
           <Button variant="secondary" onClick={() => setAccountOpen(true)}>Account</Button>
+          <Button variant="secondary" onClick={() => setCatalogueOpen(true)}>Plant catalogue</Button>
+          <Button variant="secondary" onClick={() => setMulchOpen(true)}>Mulch catalogue</Button>
         </AuthShell>
       )}
       {picking && <Sheet title="Your gardens" dismissible={!changing} onClose={() => setPicking(false)}>
@@ -41,6 +47,8 @@ export function GardensWorkspace({ user }: { user: User }) {
           onCreate={async (document) => { await store.create(document); setPicking(false); }} />
       </Sheet>}
       {accountOpen && <Sheet title="Account" onClose={() => setAccountOpen(false)}><AccountPanel user={user} /></Sheet>}
+      {catalogueOpen && <Sheet title="Plant catalogue" onClose={() => setCatalogueOpen(false)}><PlantCataloguePanel userId={user.id} /></Sheet>}
+      {mulchOpen && <Sheet title="Mulch catalogue" onClose={() => setMulchOpen(false)}><MulchCataloguePanel userId={user.id} /></Sheet>}
     </>
   );
 }

@@ -1,3 +1,4 @@
+import { canvasPalette } from '../appearance/canvasPalette';
 import { Group, Label, Line, Tag, Text } from 'react-konva';
 import type { GardenDimensions } from '../garden/garden';
 import type { Bed } from './bed';
@@ -16,12 +17,13 @@ export function BedDistanceGuides({ bed, beds, garden, pixelsPerCm, dark, viewRo
   const tickCm = 4 / pixelsPerCm;
   const labelHeightCm = 20 / pixelsPerCm;
   const turned = viewRotationDeg === 90;
+  const colors = canvasPalette(dark);
 
   return (
     <Group listening={false}>
       {getBedClearances(bed, garden, beds).map(({ side, kind, distanceCm, start, end }) => {
         const horizontal = side === 'left' || side === 'right';
-        const color = kind === 'border' ? (dark ? '#7dd3fc' : '#0369a1') : (dark ? '#fbbf24' : '#b45309');
+        const color = kind === 'border' ? colors.borderGuide : colors.neighbourGuide;
         const text = `${distanceCm} cm`;
         const labelWidthCm = Math.min(turned ? garden.lengthCm : garden.widthCm, (text.length * 7 + 12) / pixelsPerCm);
         // Counter-turn the text while keeping its world-space bounds inside the garden.
@@ -42,7 +44,7 @@ export function BedDistanceGuides({ bed, beds, garden, pixelsPerCm, dark, viewRo
                   : [point.xCm - tickCm, point.yCm, point.xCm + tickCm, point.yCm]} />
             ))}
             <Label x={xCm} y={yCm + (turned ? labelWidthCm : 0)} rotation={-viewRotationDeg}>
-              <Tag fill={dark ? '#1c1917' : '#ffffff'} stroke={color} strokeWidth={0.75 / pixelsPerCm}
+              <Tag fill={colors.label} stroke={color} strokeWidth={0.75 / pixelsPerCm}
                 cornerRadius={3 / pixelsPerCm} />
               <Text text={text} width={labelWidthCm} height={labelHeightCm} padding={4 / pixelsPerCm}
                 fontFamily="system-ui, sans-serif" fontSize={11 / pixelsPerCm} fill={color}

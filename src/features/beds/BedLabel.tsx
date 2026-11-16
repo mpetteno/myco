@@ -1,3 +1,4 @@
+import { canvasPalette } from '../appearance/canvasPalette';
 import { useMemo } from 'react';
 import { Group, Rect, Text } from 'react-konva';
 import type { Bed } from './bed';
@@ -9,6 +10,7 @@ type BedLabelProps = {
 };
 
 export function BedLabel({ bed, pixelsPerCm, dark }: BedLabelProps) {
+  const colors = canvasPalette(dark);
   const size = `${bed.widthCm} × ${bed.lengthCm} cm`;
   const measured = useMemo(() => {
     const context = document.createElement('canvas').getContext('2d')!;
@@ -29,14 +31,14 @@ export function BedLabel({ bed, pixelsPerCm, dark }: BedLabelProps) {
       <Group x={-totalWidthCm / 2} y={-heightCm / 2}>
         <Text text={bed.name} width={nameWidthCm + 1 / pixelsPerCm} height={heightCm}
           fontSize={13 / pixelsPerCm} fontFamily="system-ui, sans-serif"
-          fill="#fff7ed" stroke="#422006" strokeWidth={2 / pixelsPerCm} fillAfterStrokeEnabled
+          fill={colors.name} stroke={colors.nameOutline} strokeWidth={2 / pixelsPerCm} fillAfterStrokeEnabled
           verticalAlign="middle" wrap="none" />
         <Rect x={nameWidthCm + gapCm} width={sizeWidthCm} height={heightCm}
-          fill={dark ? '#1c1917' : '#fff7ed'} stroke={dark ? '#a8a29e' : '#704529'}
+          fill={colors.label} stroke={colors.bedBorder}
           strokeWidth={0.75 / pixelsPerCm} cornerRadius={4 / pixelsPerCm} />
         <Text x={nameWidthCm + gapCm} text={size} width={sizeWidthCm} height={heightCm}
           fontSize={11 / pixelsPerCm} fontFamily="system-ui, sans-serif"
-          fill={dark ? '#fafaf9' : '#292524'} align="center" verticalAlign="middle" wrap="none" />
+          fill={colors.labelText} align="center" verticalAlign="middle" wrap="none" />
       </Group>
     </Group>
   );

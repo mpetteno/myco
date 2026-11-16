@@ -13,6 +13,12 @@ export class GardenSaveQueue {
   constructor(private current: SavedGarden, private save: Save, private onSaved: (garden: SavedGarden) => void) {}
 
   getSnapshot = () => this.status;
+  getCurrent = () => this.current;
+  adopt = (garden: SavedGarden) => {
+    if (this.pending || this.running) throw new Error('Finish saving before refreshing the current garden.');
+    this.current = garden; this.onSaved(garden);
+    this.notify({ state:'saved',message:'',conflict:false });
+  };
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => { this.listeners.delete(listener); };

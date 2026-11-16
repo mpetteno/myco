@@ -1,3 +1,4 @@
+import { canvasPalette } from '../appearance/canvasPalette';
 import { Group, Line } from 'react-konva';
 import type { GardenDimensions } from '../garden/garden';
 import type { Bed } from './bed';
@@ -12,6 +13,7 @@ type BedAlignmentGuidesProps = {
 };
 
 export function BedAlignmentGuides({ bed, beds, garden, pixelsPerCm, dark }: BedAlignmentGuidesProps) {
+  const colors = canvasPalette(dark);
   return (
     <Group listening={false}>
       {getBedAlignments(bed, garden, beds).map(({ axis, positionCm }) => (
@@ -19,7 +21,7 @@ export function BedAlignmentGuides({ bed, beds, garden, pixelsPerCm, dark }: Bed
           points={axis === 'vertical'
             ? [positionCm, 0, positionCm, garden.lengthCm]
             : [0, positionCm, garden.widthCm, positionCm]}
-          stroke={dark ? '#e879f9' : '#a21caf'} strokeWidth={1.5 / pixelsPerCm}
+          stroke={colors.alignment} strokeWidth={1.5 / pixelsPerCm}
           dash={[6 / pixelsPerCm, 4 / pixelsPerCm]} />
       ))}
     </Group>

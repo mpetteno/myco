@@ -1,13 +1,5 @@
-import { useSyncExternalStore } from 'react';
-
-const query = '(prefers-color-scheme: dark)';
-
-function subscribe(onChange: () => void) {
-  const media = window.matchMedia(query);
-  media.addEventListener('change', onChange);
-  return () => media.removeEventListener('change', onChange);
-}
+import { useTheme } from '../../features/appearance/useTheme';
 
 export function useDarkMode() {
-  return useSyncExternalStore(subscribe, () => window.matchMedia(query).matches);
+  return useTheme().theme === 'dark';
 }

@@ -1,8 +1,9 @@
 # Deployment preparation
 
-Cloudflare Pages is the suggested web host. The frontend can deploy from GitHub;
+The browser app has been deployed to Cloudflare Pages, as reported by the project
+owner. The frontend deploys from GitHub;
 Supabase provides email/password accounts, garden storage and owner-managed
-sharing. This document prepares hosting; no site has been deployed.
+sharing. These settings document the deployment and future updates.
 
 ## Supabase configuration
 
@@ -33,7 +34,7 @@ To deploy the browser app:
 2. Select the branch you want to publish.
 3. Use the repository root as the project directory.
 4. Set the build command to `npm run build` and output directory to `dist`.
-5. Use Node.js 22.12 or newer. Node 26 is used in local development.
+5. Use Node.js 26, or a supported 22.22.2+/24.15+ release compatible with the development tools.
 6. Add the two Supabase environment variables above for the deployment
    environments that should connect to that database.
 7. Add the production application URL to Supabase Auth's site URL and allowed
@@ -41,9 +42,12 @@ To deploy the browser app:
    and preview redirect URLs deliberately as needed.
 
 Pages can deploy automatically after GitHub pushes and provide preview deployments.
-The garden migrations enable Row Level Security and restrict access to owners
-and their added editors. Apply both, in order, to every Supabase project used by
-a deployment. Sharing needs no secret key in the frontend.
+The migrations enable Row Level Security. Garden access is restricted to owners
+and their added editors. The app-wide plant and mulch catalogues are readable by signed-in
+users and editable only by catalogue administrators. Apply numbered migrations
+in order to every Supabase project used by a deployment. See
+[catalogue setup](catalogues.md) to provision administrators. No secret key is
+needed in the frontend.
 
 ## Confirmed account requirements
 

@@ -1,10 +1,10 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { SavedGarden } from './gardenDocument';
+import type { SavedGarden, GardenDocument } from './gardenDocument';
 import { GardenSaveQueue } from './GardenSaveQueue';
 import { saveGarden } from './gardenRepository';
 
-export function useGardenPersistence(initial: SavedGarden, onSaved: (garden: SavedGarden) => void) {
-  const [queue] = useState(() => new GardenSaveQueue(initial, saveGarden, onSaved));
+export function useGardenPersistence(initial: SavedGarden, onSaved: (garden: SavedGarden) => void, save: (current: SavedGarden,document: GardenDocument) => Promise<SavedGarden> = saveGarden) {
+  const [queue] = useState(() => new GardenSaveQueue(initial, save, onSaved));
   const status = useSyncExternalStore(queue.subscribe, queue.getSnapshot);
 
   useEffect(() => {
@@ -22,5 +22,5 @@ export function useGardenPersistence(initial: SavedGarden, onSaved: (garden: Sav
     catch { return queue.getSnapshot().message; }
   }
 
-  return { status, enqueue: queue.enqueue, beforeLeaving };
+  return { status, enqueue: queue.enqueue, beforeLeaving, getCurrent: queue.getCurrent, adopt:queue.adopt };
 }
