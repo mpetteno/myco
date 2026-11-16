@@ -1,0 +1,50 @@
+import { useRef } from 'react';
+import type Konva from 'konva';
+import { Circle } from 'react-konva';
+import type { GardenDimensions } from '../garden/garden';
+import type { Bed } from './bed';
+import { getResizedBed, getResizeHandlePosition, RESIZE_HANDLES } from './bedResize';
+import type { ResizeHandle } from './bedResize';
+
+type BedResizeHandlesProps = {
+  bed: Bed;
+  beds: Bed[];
+  garden: GardenDimensions;
+  pixelsPerCm: number;
+  onPreview: (bed: Bed) => void;
+  onCommit: (bed: Bed) => void;
+};
+
+export function BedResizeHandles({ bed, beds, garden, pixelsPerCm, onPreview, onCommit }: BedResizeHandlesProps) {
+  const gesture = useRef({ original: bed, lastValid: bed });
+
+  function resize(node: Konva.Node, handle: ResizeHandle) {
+    const resized = getResizedBed(gesture.current.original, handle,
+      { xCm: node.x(), yCm: node.y() }, garden, beds) ?? gesture.current.lastValid;
+    gesture.current.lastValid = resized;
+    const position = getResizeHandlePosition(resized, handle);
+    node.position({ x: position.xCm, y: position.yCm });
+    onPreview(resized);
+    return resized;
+  }
+
+  return (
+    <>
+      {RESIZE_HANDLES.map((handle) => {
+        const position = getResizeHandlePosition(bed, handle);
+        return (
+          <Circle key={handle} x={position.xCm} y={position.yCm}
+            radius={5 / pixelsPerCm} fill="#fff7ed" stroke="#704529"
+            strokeWidth={1.5 / pixelsPerCm} hitStrokeWidth={22 / pixelsPerCm}
+            draggable
+            onDragStart={() => {
+              gesture.current = { original: bed, lastValid: bed };
+              onPreview(bed);
+            }}
+            onDragMove={(event) => resize(event.target, handle)}
+            onDragEnd={(event) => onCommit(resize(event.target, handle))} />
+        );
+      })}
+    </>
+  );
+}
