@@ -27,7 +27,7 @@ test('recap retains saved historical spacing and explicit overrides instead of u
 });
 
 test('empty and invalid plans have explicit recap states without losing the bed footprint',()=>{
-  assert.deepEqual(getGardenRecap([]),{occupiedAreaCm2:0,totalPlants:0,invalidBeds:[],plants:[]});
+  assert.deepEqual(getGardenRecap([]),{occupiedAreaCm2:0,totalPlants:0,invalidBeds:[],sowings:[],plants:[]});
   const result=getGardenRecap([{...bed,plantingPlan:planV5({areas:[areaV2({plantSpacingCm:0})]})}]);
   assert.equal(result.occupiedAreaCm2,20000);assert.deepEqual(result.invalidBeds,[bed.name]);
 });

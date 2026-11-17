@@ -2,6 +2,7 @@ import type { BedPlantingPlan } from '../planting/plantingPlan';
 import type { BedPlans } from '../beds/bed';
 
 export function bedPlanDraftKey(plans: BedPlans): string {
+  if (plans.areaPlan) return JSON.stringify(plans.areaPlan);
   const planting = plantingDraftKey(plans.plantingPlan);
   const mulch = plans.mulchPlan?.areas.length ? JSON.stringify(plans.mulchPlan) : '';
   return planting || mulch ? JSON.stringify([planting, mulch]) : '';

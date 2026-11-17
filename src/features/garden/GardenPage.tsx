@@ -1,3 +1,7 @@
+import { GardenLocationForm } from '../gardens/GardenLocationForm';
+import { saveGardenLocation } from '../gardens/gardenRepository';
+import { Sheet } from '../../shared/ui/Sheet';
+import { useI18n } from '../../shared/i18n/I18nProvider';
 import type { HistoryEditorOptions } from '../history/historyDraft';
 import { HistoryEditPage } from '../history/HistoryEditPage';
 import { ThemeToggle } from '../appearance/ThemeToggle';
@@ -26,6 +30,10 @@ type GardenPageProps = {
 };
 
 export function GardenPage({ user, garden, onSaved, onChooseGardens, pickerOpen, onReload, onDiscardChanges, historyDraft }: GardenPageProps) {
+  const { t } = useI18n();
+  const [locationOpen, setLocationOpen] = useState(false);
+  const [locationError, setLocationError] = useState('');
+  const [locationSaving, setLocationSaving] = useState(false);
   const persistence = useGardenPersistence(garden, onSaved, historyDraft ? async (current, document) => ({ ...current, ...document, version: current.version + 1 }) : undefined);
   useImperativeHandle(historyDraft?.bridge, () => ({ beforeLeaving: persistence.beforeLeaving, getCurrent: persistence.getCurrent }));
   const layout = useGardenLayout({ name: garden.name, dimensions: garden.dimensions, beds: garden.beds }, persistence.enqueue);
@@ -79,7 +87,7 @@ export function GardenPage({ user, garden, onSaved, onChooseGardens, pickerOpen,
     onCopy={clipboard.copy} copyMessage={clipboard.feedback.text} />;
 
   return <EditorScreen feedback={feedback}
-    header={<header inert={history.saving} className="flex h-11 shrink-0 items-center justify-between border-b border-stone-200 bg-white px-3 sm:px-4 dark:border-stone-800 dark:bg-stone-900">
+    header={<><header inert={history.saving} className="flex h-11 shrink-0 items-center justify-between border-b border-stone-200 bg-white px-3 sm:px-4 dark:border-stone-800 dark:bg-stone-900">
           <div className="flex shrink-0 items-center gap-2"><h1 className="text-lg font-semibold tracking-tight text-green-800 dark:text-green-400">Myco</h1><span className="text-xs text-stone-600 dark:text-stone-400">{historyDraft ? 'History draft' : history.current ? 'Plan' : 'History'}</span></div>
           <button type="button" disabled={leaving || !!historyDraft} onClick={() => void chooseGardens()}
             aria-label={historyDraft ? 'Historical garden draft' : `Choose garden. Current garden: ${layout.name}. ${persistence.status.state === 'saved' ? 'All changes saved.' : 'Changes pending.'}`}
@@ -89,7 +97,22 @@ export function GardenPage({ user, garden, onSaved, onChooseGardens, pickerOpen,
           </button>
           <ThemeToggle />
           {!historyDraft && <button type="button" onClick={() => openPanel('account')} className="min-h-11 cursor-pointer rounded-lg px-3 text-sm font-medium hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-green-600 dark:hover:bg-stone-800">Account</button>}
-        </header>}
+        </header>
+        {locationOpen && <Sheet title={t('location.title')} dismissible={!locationSaving} onClose={() => setLocationOpen(false)}>
+          <p role="alert">{locationError}</p>
+          <div inert={locationSaving}><GardenLocationForm initial={persistence.getCurrent().location} onSave={(location) => {
+            if (locationSaving) return;
+            setLocationSaving(true); setLocationError('');
+            void (async () => {
+              try {
+                const error = await persistence.beforeLeaving(); if (error) throw new Error(error);
+                const updated = await saveGardenLocation(persistence.getCurrent(), location);
+                persistence.adopt(updated); setLocationOpen(false);
+              } catch (error) { setLocationError(error instanceof Error ? error.message : t('location.failed')); }
+              finally { setLocationSaving(false); }
+            })();
+          }} /></div>
+        </Sheet>}</>}
     toolbar={<GardenToolbar dimensions={shown?.dimensions ?? null} bedCount={shown?.beds.length ?? 0}
       readOnly={readOnly} bedScope={!!historyDraft?.bedId} disabled={history.saving} onHistory={historyDraft ? undefined : () => { setPanel(null); void history.show(); }}
       hasSelection={!!selectedBedId && (!historyDraft?.bedId || historyDraft.bedId === selectedBedId)} onOpen={openPanel} onEditBed={() => { if (selectedBedId) editBed(selectedBedId); }} />}>
@@ -109,7 +132,7 @@ export function GardenPage({ user, garden, onSaved, onChooseGardens, pickerOpen,
           <GardenHistoryInspector history={history} onReload={onReload} />
         </div>
         <GardenPanels historyDraft={!!historyDraft} bedScope={historyDraft?.bedId} panel={panel} onPanelChange={setPanel} layout={{ ...layout, ...(shown ?? { beds: [] }) }} user={user} readOnly={readOnly}
-          gardenId={garden.id} ownerId={garden.ownerId}
+          gardenId={garden.id} ownerId={garden.ownerId} onLocation={historyDraft ? undefined : () => { setPanel(null); setLocationOpen(true); }} location={persistence.getCurrent().location}
           beforeSignOut={persistence.beforeLeaving} onChooseGardens={() => void chooseGardens()}
           selectedBedId={selectedBedId} clipboard={clipboard} onEditBed={editBed}
           onDelete={() => { if (selectedBedId) removeBed(selectedBedId); }} />

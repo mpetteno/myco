@@ -7,22 +7,29 @@ import { AuthShell } from '../auth/AuthShell';
 import { GardenPage } from '../garden/GardenPage';
 import { GardensPicker } from './GardensPicker';
 import { useGardens } from './useGardens';
-import { PlantCataloguePanel } from '../catalogue/PlantCataloguePanel';
-import { MulchCataloguePanel } from '../mulch-catalogue/MulchCataloguePanel';
+import { CataloguePage } from '../catalogue/CataloguePage';
+import { useI18n } from '../../shared/i18n/I18nProvider';
 
 export function GardensWorkspace({ user }: { user: User }) {
+  const { t } = useI18n();
   const store = useGardens(user.id);
   const [picking, setPicking] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [changing, setChanging] = useState(false);
   const [catalogueOpen, setCatalogueOpen] = useState(false);
-  const [mulchOpen, setMulchOpen] = useState(false);
+  const [returnToPicker, setReturnToPicker] = useState(false);
+
+  function openCatalogue(fromPicker: boolean) {
+    setReturnToPicker(fromPicker); setPicking(false); setCatalogueOpen(true);
+  }
 
   return (
     <>
+      {/* Keep the editor draft mounted: the active document may predate its latest autosave. */}
+      <div hidden={catalogueOpen} inert={catalogueOpen}>
       {store.active && !store.loading && !store.error ? (
         <GardenPage key={`${store.active.id}:${store.editorVersion}`} user={user} garden={store.active}
-          onSaved={store.remember} pickerOpen={picking} onChooseGardens={() => setPicking(true)}
+          onSaved={store.remember} pickerOpen={picking || catalogueOpen} onChooseGardens={() => setPicking(true)}
           onReload={() => store.choose(store.active!.id)} onDiscardChanges={store.retry} />
       ) : (
         <AuthShell title={store.loading ? 'Loading your gardens' : 'Your gardens'}>
@@ -35,11 +42,11 @@ export function GardensWorkspace({ user }: { user: User }) {
             <Button variant="secondary" onClick={store.retry}>Refresh gardens</Button>
           </>}
           <Button variant="secondary" onClick={() => setAccountOpen(true)}>Account</Button>
-          <Button variant="secondary" onClick={() => setCatalogueOpen(true)}>Plant catalogue</Button>
-          <Button variant="secondary" onClick={() => setMulchOpen(true)}>Mulch catalogue</Button>
+          <Button variant="secondary" onClick={() => openCatalogue(false)}>{t('catalogue.title')}</Button>
         </AuthShell>
       )}
       {picking && <Sheet title="Your gardens" dismissible={!changing} onClose={() => setPicking(false)}>
+        <div className="mb-4"><Button variant="secondary" disabled={changing} onClick={() => openCatalogue(true)}>{t('catalogue.title')}</Button></div>
         <GardensPicker gardens={store.gardens} currentId={store.active?.id}
           userId={user.id} onRefresh={store.refresh}
           onPendingChange={setChanging}
@@ -47,8 +54,8 @@ export function GardensWorkspace({ user }: { user: User }) {
           onCreate={async (document) => { await store.create(document); setPicking(false); }} />
       </Sheet>}
       {accountOpen && <Sheet title="Account" onClose={() => setAccountOpen(false)}><AccountPanel user={user} /></Sheet>}
-      {catalogueOpen && <Sheet title="Plant catalogue" onClose={() => setCatalogueOpen(false)}><PlantCataloguePanel userId={user.id} /></Sheet>}
-      {mulchOpen && <Sheet title="Mulch catalogue" onClose={() => setMulchOpen(false)}><MulchCataloguePanel userId={user.id} /></Sheet>}
+      </div>
+      {catalogueOpen && <CataloguePage userId={user.id} onBack={() => { setCatalogueOpen(false); setPicking(returnToPicker); }} />}
     </>
   );
 }

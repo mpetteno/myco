@@ -1,3 +1,4 @@
+import { areasFit, validateAreaPlan } from '../area-editor/areaPlan';
 import { useRef, useState } from 'react';
 import { bedsOverlap, findFreePosition, isInsideGarden } from '../beds/bed';
 import type { Bed, BedBounds, BedDetails, BedCopy, BedPlans } from '../beds/bed';
@@ -39,6 +40,7 @@ export function useGardenLayout(initial: GardenDocument, onChange: (document: Ga
 
     if (current) {
       const updated: Bed = { ...current, ...details };
+      if (!areasFit(updated.areaPlan, updated)) return 'This size would put an area outside the bed. Resize or remove the area first.';
       if (!plantingAreasFit(updated.plantingPlan, updated)) return 'This size would put a planting area outside the bed. Edit or clear its planting plan first.';
       if (!mulchAreasFit(updated.mulchPlan, updated)) return 'This size would put a mulch area outside the bed. Resize or remove the mulch area first.';
       if (!isInsideGarden(updated, dimensions)) return 'This bed would extend outside the garden. Choose smaller dimensions.';
@@ -95,6 +97,10 @@ export function useGardenLayout(initial: GardenDocument, onChange: (document: Ga
   function saveBedPlan(bedId: string, plans: BedPlans): string | null {
     const bed = snapshot.current.beds.find((item) => item.id === bedId);
     if (!bed) return 'Select a bed first.';
+    if (plans.areaPlan) {
+      const invalid = validateAreaPlan(plans.areaPlan, bed);
+      if (invalid) return invalid;
+    }
     if (plans.plantingPlan) {
       const preview = previewPlanting(plans.plantingPlan, bed);
       if (preview.error) return preview.error;
@@ -106,7 +112,8 @@ export function useGardenLayout(initial: GardenDocument, onChange: (document: Ga
     }
     setBeds(snapshot.current.beds.map((item) => {
       if (item.id !== bedId) return item;
-      const { plantingPlan: previous, mulchPlan: previousMulch, ...details } = item;
+      const { areaPlan: previousAreas, plantingPlan: previous, mulchPlan: previousMulch, ...details } = item;
+      if (plans.areaPlan) return { ...details, areaPlan: plans.areaPlan };
       return { ...details, ...(plans.plantingPlan ? { plantingPlan: plans.plantingPlan } : {}),
         ...(plans.mulchPlan ? { mulchPlan: plans.mulchPlan } : {}) };
     }));

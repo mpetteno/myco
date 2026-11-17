@@ -17,8 +17,8 @@ export function useBedClipboard({ selectedBed, onPaste, onSelect, enabled = true
 
   function copy() {
     if (!selectedBed) return;
-    const { name, widthCm, lengthCm, plantingPlan, mulchPlan } = selectedBed;
-    setCopiedBed({ name, widthCm, lengthCm, ...(plantingPlan ? { plantingPlan: structuredClone(plantingPlan) } : {}),
+    const { name, widthCm, lengthCm, areaPlan, plantingPlan, mulchPlan } = selectedBed;
+    setCopiedBed({ name, widthCm, lengthCm, ...(areaPlan ? { areaPlan: structuredClone(areaPlan) } : {}), ...(plantingPlan ? { plantingPlan: structuredClone(plantingPlan) } : {}),
       ...(mulchPlan ? { mulchPlan: structuredClone(mulchPlan) } : {}) });
     setFeedback({ text: `Copied “${name}”.`, error: false });
   }

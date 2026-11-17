@@ -1,5 +1,9 @@
 # Bed planting plans
 
+For the unified model, broadcast sowing, green manure, seed mixtures and attached
+mulch, see [Unified areas](areas.md). Row geometry below still applies to plant-row
+areas. Legacy plan formats are retained for recorded history.
+
 ## Using the planner
 
 Select a bed, then choose **Edit bed**, open it from **Beds**, or double-click
@@ -14,7 +18,11 @@ follow the visual viewport so the drawing resizes when the on-screen keyboard
 opens, and keep the safe-area padding for device edges.
 
 **Add area** creates a rectangular planting area in available space. The first
-area fills an empty bed. Assign one plant type per area. **Split selected area**
+area fills an empty bed. Select **Plant rows** or **Broadcast sowing**.
+Row areas select a crop/cultivar; broadcast areas select a crop/cultivar or seed
+mixture and a sowing density. Rows use **Harvest crop** purpose. Broadcast areas
+can use **Harvest crop** or **Green manure**, and any area can have optional mulch
+layers. **Split selected area**
 in **Areas** controls
 divides its longer side into two grid-aligned rectangles; select a different
 type for the new area as desired. Drag areas and their edge/corner handles with
@@ -66,15 +74,16 @@ its neighbours. Live previews use the same checks as the atomic save.
 
 **Bed** controls save the bed name and size immediately through the existing
 garden save queue. Size changes cannot crop saved or draft planting areas.
-**Areas** also provides cross-area spacing settings, catalogue access, reference
-refresh and **Clear planting plan** (autosaved). **Recap** is a read-only summary:
+**Areas** also provides reference
+refresh and **Clear area plan** (autosaved). **Recap** is a read-only summary:
 plant totals grouped by type, per-area plant/row counts and dimensions, bed and
 assigned surface sizes in m², space outside planting areas, companion guidance
-and mulch-area/layer totals. Counts follow the current preview, including
-cross-area spacing checks. Invalid drafts explain why counts are unavailable. **Mulch** controls independent rectangular areas
-and their ordered material layers; see [mulch](mulch.md). Planting and mulch save
-together, and clearing one preserves the other.
-Switching controls or opening the catalogue keeps the draft. Applied plant points
+and mulch-area/layer totals. Counts follow the current preview using each area's row and border spacing. Broadcast seed quantities are shown separately from
+individual plant counts. Invalid drafts explain why counts are unavailable.
+Mulch layers are attached to the selected area; see [mulch](mulch.md). Clearing
+the area plan removes all areas and their mulch layers together.
+Switching controls keeps the draft. Shared references are managed separately on
+**Your gardens → Catalogue**. Applied plant points
 also appear in the main garden drawing. Garden copy/delete keyboard shortcuts
 are inactive inside the bed editor to protect the bed while working with areas.
 
@@ -82,7 +91,7 @@ are inactive inside the bed editor to protect the bed while working with areas.
 
 The garden toolbar also has **Recap**. It groups plants by their saved type ID
 across every displayed bed, using the same geometry, spacing overrides and
-cross-area checks as the drawing. It shows the total bed footprint in m²,
+per-area border clearances as the drawing. It shows the total bed footprint in m²,
 including beds with no planting plan. Totals follow historical snapshots without
 upgrading their saved formats. Opening the recap never saves an edit or records
 a history event. A malformed planting plan leaves the footprint available but
@@ -106,8 +115,8 @@ explains why complete plant totals are unavailable.
   unused space while keeping their chosen spacing and saved minimum end clearance.
 - Resize handles stop at the last fitting size before margins or chosen rows
   become impossible, and stay visually above distance labels.
-- Areas fill in list order.
-- With cross-area checks enabled, later candidate points are omitted when both
+- Areas calculate plant positions independently using their own border clearances.
+- In older recorded plans with cross-area checks enabled, later candidate points are omitted when both
   their horizontal and vertical gaps to an earlier area's point are below the
   larger applicable spacing on those axes. Each area's direction maps its plant
   and row distances to the bed axes, allowing perpendicular row arrangements.
@@ -120,11 +129,8 @@ the area width to 60 cm places rows at x = 15 and 45 cm: the 15 cm borders stay,
 while the 30 cm row gap triggers a warning. Choosing 3 rows in the original
 100 cm width places them at x = 15, 50 and 85 cm, giving 18 plants with 35 cm
 row gaps. Growing to 140 cm restores 40 cm row gaps with 30 cm borders.
-Across-area allocation
-is deterministic and conservative, rather than a global packing optimization.
-Requested rows remain visible even if cross-area checks remove all their plant
-points. Counts explicitly identify empty rows, with a warning explaining how to
-adjust areas or override those checks.
+Older recorded plans retain their deterministic cross-area allocation and
+empty-row counts. Current plans place plants independently in each area.
 
 Selected areas show live measurements from their borders to the outer rows and
 row endpoints, plus representative row-to-row gaps centred along the rows,
@@ -146,10 +152,9 @@ reference. A maximum of eight
 labels is shown per selected area to keep large plans readable. Measurements
 and the size bar use transient drag geometry, so they update before release.
 
-Enter custom spacing to override reference values. Turn off **Keep spacing
-between areas using the larger requirement** to explicitly permit closer
-cross-area arrangements. These exceptions stay in the plan. They do not change
-the shared catalogue. Companion suggestions, cautions and unknown combinations
+Enter custom spacing to override reference values within an area. Adjacent
+areas use their own row and border spacing, with no extra cross-area check.
+These overrides do not change the shared catalogue. Companion suggestions, cautions and unknown combinations
 are shown as guidance; cautions never disable applying the plan.
 
 For responsive previews and bounded saved documents, each bed supports up to
@@ -171,7 +176,7 @@ Existing gardens without planting plans remain valid. Garden owner/editor RLS,
 version checks and save-failure handling remain in force. Plans require no new
 secret keys, storage bucket or administrator role.
 
-`Bed.plantingPlan` contains a format version, cross-area-check
+The legacy `Bed.plantingPlan` contains a format version, cross-area-check
 choice, rectangular areas and companion guidance. Each area retains its stable
 ID, plant/family IDs, names, catalogue versions, reference distances and chosen
 distances. Version-2 areas also store their own `rowDirection` and nullable
@@ -189,7 +194,7 @@ direction; version-2 plans retain their 15 cm bed clearance, and version-3 plans
 retain their spacing-based area margins; version-4 plans retain their fixed
 20 cm minimum margins. This applies when moving a bed or
 saving unrelated garden changes. Opening an older plan in the editor
-proposes a version-5 draft with balanced rows and 15 cm minimum margins, preserving its
+proposes a unified area draft using version-5 row geometry, preserving its
 chosen row directions and counts. The first valid edit autosaves the new placement;
 opening alone does not rewrite the stored plan. This protects stored
 positions and older clients while the frontend is redeployed. Future format

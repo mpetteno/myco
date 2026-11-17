@@ -5,15 +5,15 @@ import { DEFAULT_BORDER_DISTANCE_CM, orderedTargets, validateDetails, validatePl
 import type { Catalogue, FamilyDetails, PlantDetails, RuleDetails, PlantFamily, PlantType, CompanionRule } from './catalogue';
 
 type FamilyRow = { id: string; name: string; notes: string; plant_spacing_cm: number | null; row_spacing_cm: number | null; version: number };
-type PlantRow = FamilyRow & { family_id: string; border_distance_cm: number };
+type PlantRow = FamilyRow & { family_id: string; border_distance_cm: number; scientific_name?: string; living_mulch_enabled?: boolean };
 type RuleRow = { id: string; family_a_id: string | null; plant_a_id: string | null; family_b_id: string | null;
   plant_b_id: string | null; relationship: CompanionRule['relationship']; notes: string; version: number };
 const familyColumns = 'id,name,notes,plant_spacing_cm,row_spacing_cm,version';
-const plantColumns = `${familyColumns},family_id,border_distance_cm`;
+const plantColumns = `${familyColumns},family_id,border_distance_cm,scientific_name,living_mulch_enabled`;
 const ruleColumns = 'id,family_a_id,plant_a_id,family_b_id,plant_b_id,relationship,notes,version';
 const family = (row: FamilyRow): PlantFamily => ({ id: row.id, name: row.name, notes: row.notes,
   plantSpacingCm: row.plant_spacing_cm, rowSpacingCm: row.row_spacing_cm, version: row.version });
-const plant = (row: PlantRow): PlantType => ({ ...family(row), familyId: row.family_id, borderDistanceCm: row.border_distance_cm ?? DEFAULT_BORDER_DISTANCE_CM });
+const plant = (row: PlantRow): PlantType => ({ ...family(row), familyId: row.family_id, borderDistanceCm: row.border_distance_cm ?? DEFAULT_BORDER_DISTANCE_CM, scientificName: row.scientific_name ?? '', livingMulchEnabled: row.living_mulch_enabled ?? false });
 const rule = (row: RuleRow): CompanionRule => ({ id: row.id, notes: row.notes, relationship: row.relationship, version: row.version,
   first: row.family_a_id ? { kind: 'family', id: row.family_a_id } : { kind: 'plant', id: row.plant_a_id! },
   second: row.family_b_id ? { kind: 'family', id: row.family_b_id } : { kind: 'plant', id: row.plant_b_id! } });
@@ -24,11 +24,12 @@ export async function loadCatalogue(userId: string): Promise<Catalogue> {
     client.from('plant_families').select(familyColumns).order('name'),
     client.from('plant_types').select(plantColumns).order('name'),
     client.from('companion_rules').select(ruleColumns).order('created_at'),
+    client.from('plant_cultivars').select('*').order('name'),
     client.from('catalogue_administrators').select('user_id').eq('user_id', userId).maybeSingle(),
   ]);
   for (const result of results) if (result.error) throw catalogueError(result.error);
   return { families: (results[0].data as FamilyRow[]).map(family), plants: (results[1].data as PlantRow[]).map(plant),
-    rules: (results[2].data as RuleRow[]).map(rule), isAdmin: !!results[3].data };
+    rules: (results[2].data as RuleRow[]).map(rule), cultivars: (results[3].data ?? []).map((row: Record<string, unknown>) => ({ id: row.id as string, name: row.name as string, notes: row.notes as string, version: Number(row.version), plantTypeId: row.plant_type_id as string, plantSpacingCm: row.plant_spacing_cm as number | null, rowSpacingCm: row.row_spacing_cm as number | null, borderDistanceCm: row.border_distance_cm as number | null, livingMulchEnabled: row.living_mulch_enabled as boolean | null })), isAdmin: !!results[4].data };
 }
 
 async function write(table: string, columns: string, payload: object, current?: { id: string; version: number }): Promise<unknown> {
@@ -52,7 +53,7 @@ export async function savePlant(details: PlantDetails, current?: PlantType): Pro
   const error = validatePlantDetails(details);
   if (error) throw new GardenStorageError(error);
   return plant(await write('plant_types', plantColumns, { ...detailsPayload(details), family_id: details.familyId,
-    border_distance_cm: details.borderDistanceCm }, current) as PlantRow);
+    border_distance_cm: details.borderDistanceCm, scientific_name: details.scientificName?.trim() ?? '', living_mulch_enabled: details.livingMulchEnabled ?? false }, current) as PlantRow);
 }
 export async function saveRule(details: RuleDetails, current?: CompanionRule): Promise<CompanionRule> {
   if (!details.first.id || !details.second.id || !['companion', 'caution'].includes(details.relationship) || details.notes.length > 2000) {

@@ -47,7 +47,9 @@ and their added editors. The app-wide plant and mulch catalogues are readable by
 users and editable only by catalogue administrators. Apply numbered migrations
 in order to every Supabase project used by a deployment. See
 [catalogue setup](catalogues.md) to provision administrators. No secret key is
-needed in the frontend.
+needed in the frontend. Garden location uses a region dropdown and optional city;
+no Edge Function or geocoding-provider configuration is required. Apply migration
+`202611170026_manual_garden_region.sql` for locations without coordinates.
 
 ## Confirmed account requirements
 

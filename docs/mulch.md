@@ -1,8 +1,8 @@
 # Mulch
 
-Open **More → Mulch catalogue** from a garden, or **Mulch catalogue** in the
-workspace before creating a garden. The panel uses the existing phone, safe-area
-and dark-mode layout.
+Open **Your gardens → Catalogue**, then select **Mulch materials**. The empty
+workspace also has a **Catalogue** button. Plants, calendars, materials and
+categories share this dedicated page with phone, safe-area and dark-mode support.
 
 There is one app-wide catalogue. Signed-in users can browse and search names
 and notes. The same administrators who manage the plant catalogue can add and
@@ -21,23 +21,21 @@ write columns, duplicate protection and the existing catalogue version trigger.
 No new administrator role or secret frontend key is required. Administrator
 provisioning is documented in [catalogue setup](catalogues.md).
 
-Types cannot be hard-deleted through the app, so their IDs can support saved
-plans and future history references.
+After migration `202611170020_catalogue_removal.sql`, administrators can remove a
+type using **Remove** and a confirmation. The operation checks administrator
+membership and the loaded revision. Existing plans, activities and history keep
+their saved material references; direct table deletion remains denied to clients.
 
-## Areas and layers in a bed
+## Layers attached to an area
 
-Open a bed and choose **Mulch** in its toolbar, then **Add mulch area**. The first
-rectangle fills the bed, independently of any planting areas. Name it, move it,
-or drag its edge/corner handles with mouse or touch. Rectangles snap to 5 cm,
-stay within the bed and cannot overlap other mulch rectangles. Resize the first
-one to make space before adding another. Planting and mulch areas may overlap.
+Open a bed, choose **Areas**, select an area, and use **Add mulch layer** in its
+settings or focused area editor. Plant rows and broadcast sowing areas
+can all have zero to eight layers. There is no separate mulch area or toolbar.
+Layers share the area's position and dimensions and move/resize with it.
 
-Each area has one or more layers. Choose a catalogue type for each layer and use
-**Add layer on top**, **Lower**, **Higher** and **Remove** to manage the stack.
-The list runs from bottom to top; the final layer is the visible surface.
-**Preview layer** shows an individual layer in the selected area without changing
-the stack. **Show top layers** restores the normal view. Planting tools and the
-garden drawing always show the top layers. Layers may repeat the same material.
+Choose a catalogue material for each layer. **Lower**, **Higher** and **Remove**
+manage the stack from bottom to top. The final layer is the visible surface.
+Removing the last layer leaves the same area without mulch. Materials may repeat.
 
 Every layer automatically excludes a circle of **5 cm radius** around every
 plant point in the bed, including circles that intersect a mulch area's edge.
@@ -48,37 +46,42 @@ canvas surface so clearing the circles reveals soil without erasing the grid,
 plants or other beds. Lower layers have the same clearance and cannot show
 through a top-layer hole.
 
-Valid planting and mulch edits autosave atomically through the existing garden
-save queue in Plan mode. Back waits for saves; invalid fields need correction
-or discarding. Expanding a mulch rectangle shrinks touched mulch neighbours
-horizontally and vertically, preserving their materials and layers. Neighbours
-keep at least 5 cm per dimension; the resize stops before an area disappears.
-Planting areas are independent and never shrink when editing mulch. A bed can contain mulch without any plants. Removing the
-last mulch area clears its saved mulch while preserving planting; clearing
-planting preserves mulch. Bed size changes cannot crop saved or draft mulch.
-Copying a bed deep-copies materials and gives its areas/layers new IDs.
+Valid area edits autosave atomically through the existing garden save queue.
+Back waits for saves; invalid fields need correction or discarding. Neighbour
+resizing respects all area kinds and the clearances/rows of row plantings.
+Changing an area's planting method keeps its dimensions, purpose and layers.
+Deleting an area removes its attached layers. Copying a bed gives areas and
+layers new IDs and deep-copies their catalogue snapshots.
 
-Apply `supabase/migrations/202611160010_bed_mulch_plans.sql` after the catalogue
-migration. It adds validation and a garden check constraint; existing gardens
-remain valid and no stored layouts are rewritten. Garden owners and shared
-editors can change mulch plans without being catalogue administrators.
-
-`Bed.mulchPlan` stores format version 1 and up to 12 named rectangles, each with
-up to 8 layers in bottom-to-top order. Each layer captures the material's ID,
-name, notes and catalogue revision. Catalogue edits do not rewrite applied
-layers; choosing a type again adopts its current reference. Display previews
-and clearance circles are derived rather than stored. Client and database
-validation enforce bounds, grid, non-overlap, unique area/layer IDs and bounded
-snapshot contents. [Layout history](history.md) retains these plans in explicit
-dated garden snapshots. [Mulch activities](activities.md) distinguish planned
-dates from actual completion checkpoints. Thickness and individual layer-level
-activity records remain future steps.
+Migration `202611170021_unified_areas_seed_mixtures.sql` introduces `Bed.areaPlan`.
+The legacy `Bed.mulchPlan` format and renderer remain available for older history.
+New plans store material snapshots in each area's `mulch` array. Client and
+database validation enforce bounds, grid, non-overlap, unique IDs and bounded
+snapshots. See [Unified areas](areas.md) for the full model and migration details.
 
 `npm test` checks the real migration in isolated PostgreSQL, reader/admin/anonymous
 permissions, administrator revocation, duplicate names, revision conflicts and
 protected metadata. Repository tests check Supabase requests and errors. React
 DOM tests cover search, creation, editing, failed saves and refresh after access
 changes. Plan tests cover shared atomic saves, stale writes, malformed snapshots,
-grid/bounds, layer order, copies, clearance drawing commands, independent mulch
+grid/bounds, layer order, copies, clearance drawing commands, area attachments
 and planting, autosave and invalid-field discard behaviour. They do not verify native device
 layout or browser pixel rendering. Tests create no live catalogue records or users.
+
+## Categories and living mulch
+
+After migration `202611170018_catalogue_guidance.sql`, materials belong to organic,
+synthetic or living categories. Existing materials may remain unclassified until
+an administrator edits them. Categories can be managed by selecting **Mulch categories** on the catalogue
+page. Only catalogue administrators can manage either materials or
+categories; all signed-in users can browse and use eligible materials.
+
+Living materials reference a crop and optionally its cultivar. A crop must have
+**Can be used as living mulch** enabled, or the selected cultivar must explicitly
+enable it. Cultivars otherwise inherit eligibility from their crop. Other material
+categories cannot reference plants; cultivar references must belong to their crop.
+
+Disabling plant eligibility prevents newly applying that material. Existing layers
+and historical snapshots remain valid. The client filters unavailable materials,
+and the database independently checks newly applied layers during garden saves.
+A living layer is a material reference, without generated planting points or tasks.

@@ -11,8 +11,8 @@ export function MulchLayers({ draft }: { draft: ReturnType<typeof useMulchDraft>
     <ol className="space-y-3">{selected.layers.map((layer, index) => <li key={layer.id} className="space-y-3 rounded-lg border border-stone-200 p-3 dark:border-stone-700">
       <SelectField id={`mulch-layer-${layer.id}`} label={`Layer ${index + 1}${index === selected.layers.length - 1 ? ' (top)' : index === 0 ? ' (bottom)' : ''}`}
         value={layer.material.id} disabled={draft.loading || !catalogue} onChange={(event) => draft.chooseMaterial(layer.id, event.target.value)}>
-        {!catalogue?.types.some((item) => item.id === layer.material.id) && <option value={layer.material.id}>{layer.material.name} (saved reference)</option>}
-        {catalogue?.types.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+        {!catalogue?.types.some((item) => item.id === layer.material.id && item.available !== false) && <option value={layer.material.id}>{layer.material.name} (saved reference)</option>}
+        {catalogue?.types.filter((item) => item.available !== false).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
       </SelectField>
       {layer.material.notes && <p className="break-words text-xs text-stone-600 dark:text-stone-400">{layer.material.notes}</p>}
       <div className="grid grid-cols-2 gap-2">
@@ -23,7 +23,7 @@ export function MulchLayers({ draft }: { draft: ReturnType<typeof useMulchDraft>
         <Button variant="secondary" disabled={selected.layers.length === 1} aria-label={`Remove layer ${index + 1}`} onClick={() => draft.removeLayer(layer.id)}>Remove</Button>
       </div>
     </li>)}</ol>
-    <Button disabled={draft.loading || !catalogue?.types.length || selected.layers.length >= MAX_MULCH_LAYERS} onClick={draft.addLayer}>Add layer on top</Button>
+    <Button disabled={draft.loading || !catalogue?.types.some((item) => item.available !== false) || selected.layers.length >= MAX_MULCH_LAYERS} onClick={draft.addLayer}>Add layer on top</Button>
     {draft.preview && <Button variant="secondary" onClick={() => draft.setPreview(null)}>Show top layers</Button>}
   </div>;
 }

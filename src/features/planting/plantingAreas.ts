@@ -1,9 +1,10 @@
+import { plantLabel } from './plantingPlan';
 import type { GardenDimensions } from '../garden/garden';
 import { findFreePosition } from '../beds/bed';
 import type { Bed, BedBounds } from '../beds/bed';
 import type { PlantingArea } from './plantingPlan';
 
-export const areaBeds = (areas: PlantingArea[]): Bed[] => areas.map((area, index) => ({ ...area, name: `${index + 1}. ${area.plant.name}` }));
+export const areaBeds = (areas: PlantingArea[]): Bed[] => areas.map((area, index) => ({ ...area, name: `${index + 1}. ${plantLabel(area.plant)}` }));
 
 export function freeArea(size: GardenDimensions, areas: BedBounds[]): BedBounds | null {
   const widths = [...new Set([size.widthCm, Math.max(5, Math.floor(size.widthCm / 10) * 5), Math.min(100, size.widthCm), 5])].sort((a, b) => b - a);

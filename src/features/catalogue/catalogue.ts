@@ -1,12 +1,12 @@
 export type CatalogueRecord = { id: string; name: string; notes: string; version: number };
 export type Spacing = { plantSpacingCm: number | null; rowSpacingCm: number | null };
 export type PlantFamily = CatalogueRecord & Spacing;
-export type PlantType = CatalogueRecord & Spacing & { familyId: string; borderDistanceCm: number };
+export type PlantType = CatalogueRecord & Spacing & { familyId: string; borderDistanceCm: number; scientificName?: string; livingMulchEnabled?: boolean };
 export const DEFAULT_BORDER_DISTANCE_CM = 15;
 export type CompanionTarget = { kind: 'family' | 'plant'; id: string };
 export type CompanionRule = { id: string; first: CompanionTarget; second: CompanionTarget;
   relationship: 'companion' | 'caution'; notes: string; version: number };
-export type Catalogue = { families: PlantFamily[]; plants: PlantType[]; rules: CompanionRule[]; isAdmin: boolean };
+export type Catalogue = { families: PlantFamily[]; plants: PlantType[]; rules: CompanionRule[]; cultivars?: PlantCultivar[]; isAdmin: boolean };
 export type FamilyDetails = Omit<PlantFamily, 'id' | 'version'>;
 export type PlantDetails = Omit<PlantType, 'id' | 'version'>;
 export type RuleDetails = Omit<CompanionRule, 'id' | 'version'>;
@@ -34,6 +34,7 @@ export function validateBorderDistanceCm(value: number): string | null {
     ? null : 'Border distance must be at least 5 cm, in steps of 5 cm.';
 }
 export function validatePlantDetails(details: PlantDetails): string | null {
+  if ((details.scientificName?.length ?? 0) > 200) return 'Keep scientific names within 200 characters.';
   return validateDetails(details) ?? (!details.familyId ? 'Choose a plant family.' : null)
     ?? validateBorderDistanceCm(details.borderDistanceCm);
 }
@@ -61,4 +62,14 @@ export function companionAdvice(first: Pick<PlantType, 'id' | 'familyId'>, secon
   return { relationship: applicable.length === 0 ? 'unknown' as const
     : applicable.some((rule) => rule.relationship === 'caution') ? 'caution' as const : 'companion' as const,
   rules: applicable };
+}
+
+export type PlantCultivar = CatalogueRecord & Spacing & { plantTypeId: string; borderDistanceCm: number | null; livingMulchEnabled: boolean | null };
+export function effectiveCultivar(crop: PlantType, cultivar?: PlantCultivar): PlantType {
+  if (!cultivar) return crop;
+  if (cultivar.plantTypeId !== crop.id) throw new Error('Cultivar does not belong to this crop.');
+  return { ...crop, plantSpacingCm: cultivar.plantSpacingCm ?? crop.plantSpacingCm,
+    rowSpacingCm: cultivar.rowSpacingCm ?? crop.rowSpacingCm,
+    borderDistanceCm: cultivar.borderDistanceCm ?? crop.borderDistanceCm,
+    livingMulchEnabled: cultivar.livingMulchEnabled ?? crop.livingMulchEnabled ?? false };
 }

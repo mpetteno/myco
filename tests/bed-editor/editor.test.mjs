@@ -1,3 +1,4 @@
+import { broadcast, areaPlan, rows } from '../planting/area-fixtures.mjs';
 import { after, afterEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
@@ -31,7 +32,7 @@ async function choose(id, value) {
   await act(async () => { input.value = value; input.dispatchEvent(new window.Event('change', { bubbles: true })); });
 }
 async function openBed(currentBed = bed) {
-  globalThis.__editorFixture = { saves: [], save: async () => {}, mulchCatalogue: { isAdmin: false, types: [straw, chips] }, catalogue: { isAdmin: false,
+  globalThis.__editorFixture = { saves: [], save: async () => {}, seedMixtures: [{ id: 'default-mix', name: 'Demo mixture', notes: 'Fixture', version: 1, components: [{ plantTypeId: 'type-a', cultivarId: null, percentage: 100 }] }], mulchCatalogue: { isAdmin: false, types: [straw, chips] }, catalogue: { isAdmin: false,
     families: [{ id: 'family-a', name: 'Family A', notes: '', version: 1, plantSpacingCm: 30, rowSpacingCm: 40 }],
     plants: [{ id: 'type-a', familyId: 'family-a', name: 'Type A', notes: '', version: 1, plantSpacingCm: null, rowSpacingCm: null }], rules: [] } };
   root = createRoot(document.getElementById('root'));
@@ -69,7 +70,7 @@ test('valid bed edits autosave by default, while incomplete fields protect navig
   const warning = new window.Event('beforeunload', { cancelable: true }); window.dispatchEvent(warning);
   assert.equal(warning.defaultPrevented, true);
   await click('Back to garden');
-  assert.ok(document.querySelector('section[aria-label="Unapplied planting changes"]'));
+  assert.ok(document.querySelector('section[aria-label="Unapplied area changes"]'));
   assert.equal(document.querySelector('dialog'), null);
   await click('Keep editing'); assert.match(document.body.textContent, /Changes need attention/);
   await click('Back to garden'); await click('Discard and return');
@@ -82,7 +83,7 @@ test('returning from the bed editor waits for its pending automatic save', async
   let complete;
   globalThis.__editorFixture.save = () => new Promise((resolve) => { complete = resolve; });
   await click('Add area');
-  assert.equal(globalThis.__editorFixture.saves[0].beds[0].plantingPlan.areas.length, 1);
+  assert.equal(globalThis.__editorFixture.saves[0].beds[0].areaPlan.areas.length, 1);
   assert.ok(document.querySelector('[data-testid="bed-canvas"]'));
   await click('Back to garden');
   assert.ok(document.querySelector('[data-testid="bed-canvas"]'), 'pending save keeps the editor visible');
@@ -98,7 +99,7 @@ test('failed automatic saves keep the editor and its latest data available for r
   assert.match(document.body.textContent, /not saved|Check your connection/);
   globalThis.__editorFixture.save = async () => {};
   await click('Retry save');
-  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].plantingPlan.areas[0].rowCount, 3);
+  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0].rowCount, 3);
   await click('Back to garden');assert.ok(button('Edit bed'));
 });
 
@@ -117,16 +118,17 @@ test('bed name changes save on the page and dimensions cannot crop draft areas',
   assert.equal(document.querySelector('h1').textContent, 'Renamed bed');
   assert.equal(globalThis.__editorFixture.saves[0].beds[0].name, 'Renamed bed');
   await click('Add area'); await click('Bed'); await type('bed-width', '95'); await click('Save bed');
-  assert.match(document.body.textContent, /crop a draft planting area/);
+  assert.match(document.body.textContent, /crop a draft area/);
   assert.equal(globalThis.__editorFixture.saves.length, 2);
 });
 
-test('catalogue access preserves the planting draft and all areas can be removed automatically', async () => {
-  await openBed(); await click('Add area'); await click('Areas'); await click('Plant catalogue');
-  await click('Back to areas');
-  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].plantingPlan.areas.length, 1);
+test('refreshing planting references preserves the draft without offering catalogue management', async () => {
+  await openBed(); await click('Add area'); await click('Areas');
+  assert.equal(button('Plant catalogue'), undefined);
+  await click('Refresh area references');
+  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas.length, 1);
   await click('Areas'); await click('Remove selected area');
-  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].plantingPlan, undefined);
+  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas.length, 0);
   assert.ok(document.querySelector('[data-testid="bed-canvas"]'));
 });
 
@@ -142,12 +144,12 @@ test('each area has its own saved direction and row count, defaulting to the lon
   await openBed({ ...bed, widthCm: 300, lengthCm: 100 }); await click('Add area');
   assert.equal(document.getElementById('planting-area-direction').value, 'width');
   assert.equal(document.getElementById('planting-row-count').value, '2');
-  assert.match(document.body.textContent, /Minimum clearances: 15 cm at row sides and 15 cm at row ends/);
+  assert.ok(!document.body.textContent.includes('Minimum clearances:'));
   await click('Split selected area'); await choose('planting-area-direction', 'length');
   await type('planting-row-count', '3');
   assert.equal(document.getElementById('planting-row-spacing'), null, 'row spacing is calculated in manual-count mode');
  
-  const saved = globalThis.__editorFixture.saves.at(-1).beds[0].plantingPlan;
+  const saved = globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan;
   assert.equal(saved.version, 5);
   assert.equal(saved.areas[0].rowDirection, 'width'); assert.equal(saved.areas[0].rowCount, 2);
   assert.equal(saved.areas[1].rowDirection, 'length'); assert.equal(saved.areas[1].rowCount, 3);
@@ -159,7 +161,7 @@ test('a row count can be entered even when the catalogue has no row-spacing reco
   await openBed();
   globalThis.__editorFixture.catalogue.families[0].rowSpacingCm = null;
   await click('Add area'); await type('planting-row-count', '2');
-  const saved = globalThis.__editorFixture.saves.at(-1).beds[0].plantingPlan;
+  const saved = globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan;
   assert.equal(saved.areas[0].rowCount, 2); assert.equal(saved.areas[0].plant.rowSpacingCm, null);
 });
 
@@ -191,7 +193,7 @@ test('area resize commits balance borders, compress rows, reject cropping and ke
   await act(async () => globalThis.__editorCanvas.onBounds(id, { xCm: 0, yCm: 0, widthCm: 35, lengthCm: 200 }));
   assert.equal(globalThis.__editorCanvas.plan.areas[0].widthCm, 80);
  
-  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].plantingPlan.areas[0].widthCm, 80);
+  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0].widthCm, 80);
 });
 
 test('drag handles restore the last fitting geometry instead of letting rows lose their margins', async () => {
@@ -225,90 +227,113 @@ test('area name and live size sit in a fixed-height information bar with a text 
   assert.match(document.body.textContent, /closer than the catalogue recommendation/);
 });
 
-test('mulch areas and layers edit alongside planting and save atomically without persisting layer previews', async () => {
-  await openBed(); await click('Add area'); await click('Mulch'); await click('Add mulch area');
-  assert.equal(globalThis.__editorCanvas.editingMulch, true);
-  assert.equal(globalThis.__editorCanvas.plan.areas.length, 1);
-  assert.equal(globalThis.__editorCanvas.mulch.plan.areas[0].widthCm, bed.widthCm);
-  await click('Add layer on top');
-  const area = globalThis.__editorCanvas.mulch.plan.areas[0];
-  await choose(`mulch-layer-${area.layers[1].id}`, chips.id);
-  await click('Preview layer 1');
-  assert.equal(globalThis.__editorCanvas.mulch.preview.layerId, area.layers[0].id);
-  await click('Move layer 2 down');
+test('mulch layers belong to the selected area and save in bottom-to-top order', async () => {
+  await openBed(); await click('Add area');
+  assert.equal(button('Mulch'), undefined);
+  await click('Add mulch layer'); await click('Add mulch layer');
+  const area = globalThis.__editorCanvas.plan.areas[0];
+  await choose(`mulch-layer-${area.mulch[1].id}`, chips.id); await click('Move layer 2 down');
   const saved = globalThis.__editorFixture.saves.at(-1).beds[0];
-  assert.equal(saved.plantingPlan.areas.length, 1);
-  assert.deepEqual(saved.mulchPlan.areas[0].layers.map((layer) => layer.material.name), ['Wood chips', 'Straw']);
-  assert.equal(saved.mulchPlan.preview, undefined);
-  await click('Back to garden'); await click('Edit bed'); await click('Mulch');
-  assert.deepEqual(globalThis.__editorCanvas.mulch.plan, saved.mulchPlan);
+  assert.equal(saved.plantingPlan, undefined); assert.equal(saved.mulchPlan, undefined);
+  assert.deepEqual(saved.areaPlan.areas[0].mulch.map((layer) => layer.material.name), ['Wood chips', 'Straw']);
+  await click('Back to garden'); await click('Edit bed');
+  assert.deepEqual(globalThis.__editorCanvas.plan, saved.areaPlan);
+  await click('Areas'); await click('Remove layer 2'); await click('Remove layer 1');
+  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0].mulch.length, 0);
 });
 
-test('mulch gestures stay within the bed without overlap and an unplanted bed autosaves mulch', async () => {
-  await openBed(); await click('Mulch'); await click('Add mulch area');
-  const id = globalThis.__editorCanvas.mulch.plan.areas[0].id;
-  await act(async () => globalThis.__editorCanvas.mulch.onBounds(id, { xCm: 0, yCm: 0, widthCm: 50, lengthCm: 100 }));
-  await click('Add mulch area');
-  const second = globalThis.__editorCanvas.mulch.plan.areas[1];
-  await act(async () => globalThis.__editorCanvas.mulch.onBounds(second.id, { xCm: 0, yCm: 0, widthCm: 50, lengthCm: 100 }));
-  assert.deepEqual(globalThis.__editorCanvas.mulch.plan.areas[1], second, 'overlap is rejected');
-  await act(async () => globalThis.__editorCanvas.mulch.onBounds(id, { xCm: 1, yCm: 0, widthCm: 50, lengthCm: 100 }));
-  assert.equal(globalThis.__editorCanvas.mulch.plan.areas[0].xCm, 0, 'off-grid changes are rejected');
-  await act(async () => globalThis.__editorCanvas.mulch.onBounds(id, { xCm: 95, yCm: 0, widthCm: 50, lengthCm: 100 }));
-  assert.equal(globalThis.__editorCanvas.mulch.plan.areas[0].xCm, 0, 'overflow is rejected');
- 
-  const saved = globalThis.__editorFixture.saves.at(-1).beds[0];
-  assert.equal(saved.plantingPlan, undefined); assert.equal(saved.mulchPlan.areas.length, 2);
+test('broadcast areas support mulch, resizing and independent area identities', async () => {
+  await openBed(); await click('Add area'); await choose('area-kind', 'broadcast'); await type('broadcast-density', '10'); await click('Add mulch layer');
+  const id = globalThis.__editorCanvas.plan.areas[0].id;
+  await act(async () => globalThis.__editorCanvas.onBounds(id, { xCm: 0, yCm: 0, widthCm: 50, lengthCm: 100 }));
+  await click('Add area'); await choose('area-kind', 'broadcast'); await type('broadcast-density', '10'); await click('Add mulch layer');
+  const second = globalThis.__editorCanvas.plan.areas[1];
+  await act(async () => globalThis.__editorCanvas.onBounds(second.id, { xCm: 0, yCm: 0, widthCm: 50, lengthCm: 100 }));
+  assert.deepEqual(globalThis.__editorCanvas.plan.areas[1], second, 'overlap is rejected');
+  await act(async () => globalThis.__editorCanvas.onBounds(id, { xCm: 1, yCm: 0, widthCm: 50, lengthCm: 100 }));
+  assert.equal(globalThis.__editorCanvas.plan.areas[0].xCm, 0);
+  const saved = globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan;
+  assert.equal(saved.areas[0].kind, 'broadcast'); assert.equal(saved.areas[0].mulch.length, 1);
+  assert.notEqual(saved.areas[0].mulch[0].id, saved.areas[1].mulch[0].id);
 });
 
-test('mulch edits autosave through catalogue navigation and invalid names protect leaving', async () => {
-  await openBed(); await click('Mulch'); await click('Add mulch area');
-  await type('mulch-area-name', 'Winter cover');
-  await click('Mulch catalogue'); await click('Back to mulch plan');
-  assert.equal(document.getElementById('mulch-area-name').value, 'Winter cover');
-  await type('mulch-area-name','');
-  const writes=globalThis.__editorFixture.saves.length;
-  const warning = new window.Event('beforeunload', { cancelable: true }); window.dispatchEvent(warning);
-  assert.equal(warning.defaultPrevented, true);
-  await click('Back to garden'); assert.match(document.body.textContent, /could not be saved/);
-  await click('Discard and return');
-  assert.equal(globalThis.__editorFixture.saves.length, writes); assert.ok(button('Select fixture bed'));
-  await click('Edit bed');assert.equal(globalThis.__editorCanvas.mulch.plan.areas[0].name,'Winter cover');
+test('automatic crop labels and attached mulch survive reference refresh and reopening', async () => {
+  await openBed(); await click('Add area'); await choose('area-kind', 'broadcast'); await type('broadcast-density', '10');
+  assert.equal(document.getElementById('area-name'), null); await click('Add mulch layer');
+  await click('Refresh area references'); assert.match(document.getElementById('planting-selected-area').textContent, /Type A/);
+  await click('Back to garden'); await click('Edit bed'); await click('Areas');
+  assert.equal(document.getElementById('area-name'), null);
+  assert.match(document.getElementById('planting-selected-area').textContent, /Type A/);
+  assert.equal(globalThis.__editorCanvas.plan.areas[0].mulch.length, 1);
 });
 
-test('bed metadata cannot crop mulch and removing the last area clears saved mulch', async () => {
+test('bed dimensions cannot crop a mulched area, and removal clears the area and its layers together', async () => {
   await openBed({ ...bed, mulchPlan: mulchPlan() }); await click('Bed');
   await type('bed-width', '95'); await click('Save bed');
-  assert.match(document.body.textContent, /crop a draft mulch area/);
+  assert.match(document.body.textContent, /crop a draft area/);
   assert.equal(globalThis.__editorFixture.saves.length, 0);
-  await click('Mulch'); await click('Remove selected mulch area');
-  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].mulchPlan, undefined);
+  await click('Areas'); await click('Remove selected area');
+  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas.length, 0);
 });
 
-test('clearing a planting plan keeps mulch and autosaves both plans', async () => {
-  await openBed(); await click('Add area'); await click('Mulch'); await click('Add mulch area');
-  await click('Areas'); await click('Clear planting plan');
-  const saved = globalThis.__editorFixture.saves.at(-1).beds[0];
-  assert.equal(saved.plantingPlan, undefined); assert.equal(saved.mulchPlan.areas.length, 1);
+test('changing planting method keeps bounds, purpose and mulch while clearing the whole plan removes all areas', async () => {
+  await openBed(); await click('Add area'); await click('Add mulch layer');
+  await choose('area-purpose', 'green_manure'); await type('broadcast-density', '10');
+  const saved = globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0];
+  assert.equal(saved.kind, 'broadcast'); assert.equal(saved.purpose, 'green_manure'); assert.equal(saved.mulch.length, 1);
+  assert.equal(saved.widthCm, bed.widthCm);
+  await click('Clear area plan'); assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas.length, 0);
 });
 
-test('focused planting and mulch area pages keep the bed draft and autosave through the same save flow',async()=>{
-  await openBed(); await click('Add area'); await click('Areas'); await click('Open area editor');
-  assert.ok(button('← Back to bed')); assert.equal(globalThis.__editorCanvas.focus.kind,'planting');
-  assert.ok(button('Hide settings'));assert.equal(globalThis.__editorCanvas.focusZoom,0.8);
-  await click('Zoom out');assert.ok(globalThis.__editorCanvas.focusZoom<0.8);
-  await click('Fit area');assert.equal(globalThis.__editorCanvas.focusZoom,0.8);
-  await click('Hide settings');assert.ok(button('Show settings'));await click('Show settings');
-   await type('planting-row-count','3');
-  await click('← Back to bed'); assert.equal(globalThis.__editorCanvas.plan.areas[0].rowCount,3);
-  await click('Mulch'); await click('Add mulch area'); await click('Open area editor');
-  assert.equal(globalThis.__editorCanvas.focus.kind,'mulch'); 
-  await type('focused-mulch-name','Winter cover'); await click('Add layer on top');
- 
-  const saved=globalThis.__editorFixture.saves.at(-1).beds[0];
-  assert.equal(saved.plantingPlan.areas[0].rowCount,3);
-  assert.equal(saved.mulchPlan.areas[0].name,'Winter cover'); assert.equal(saved.mulchPlan.areas[0].layers.length,2);
-  assert.equal(document.querySelector('dialog'),null);
+test('focused area settings support planting and mulch with a shared draft, zoom and autosave', async () => {
+  await openBed(); await click('Add area'); await click('Open area editor');
+  assert.ok(button('← Back to bed')); assert.equal(globalThis.__editorCanvas.focus.kind, 'planting');
+  assert.equal(globalThis.__editorCanvas.focusZoom, 0.8);
+  await click('Zoom out'); assert.ok(globalThis.__editorCanvas.focusZoom < 0.8);
+  await click('Fit area'); assert.equal(globalThis.__editorCanvas.focusZoom, 0.8);
+  await click('Hide settings'); assert.ok(button('Show settings')); await click('Show settings');
+  await type('planting-row-count', '3'); assert.equal(document.getElementById('area-name'), null); await click('Add mulch layer');
+  await click('← Back to bed');
+  const saved = globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0];
+  assert.equal(saved.rowCount, 3); assert.equal(saved.mulch.length, 1);
+  assert.equal(document.querySelector('dialog'), null);
+});
+
+test('broadcast green manure calculates seed quantities, requires density and keeps mixture snapshots', async () => {
+  await openBed(); await click('Add area'); await click('Open area editor');
+  const fixture = globalThis.__editorFixture;
+  fixture.seedMixtures = [{ id: 'mix', name: 'Cover mix', notes: '', version: 1, components: [{ plantTypeId: 'type-a', cultivarId: null, percentage: 100 }] }];
+  await click('← Back to bed'); await click('Refresh area references'); await click('Open area editor');
+  await choose('area-purpose', 'green_manure');
+  const writes = fixture.saves.length;
+  assert.equal(document.getElementById('area-kind'), null);
+  assert.equal(fixture.saves.length, writes, 'missing density remains an unsaved draft');
+  await choose('seed-mixture', 'mix'); await type('broadcast-density', '10');
+  assert.equal(document.getElementById('broadcast-total').value, '20');
+  assert.equal(document.getElementById('broadcast-total').readOnly, true);
+  assert.equal(document.getElementById('broadcast-density-unit'), null);
+  await click('Add mulch layer');
+  const saved = fixture.saves.at(-1).beds[0].areaPlan.areas[0];
+  assert.equal(saved.purpose, 'green_manure'); assert.equal(saved.sowing.mixture.name, 'Cover mix');
+  assert.equal(saved.sowing.mixture.components[0].plant.name, 'Type A'); assert.equal(saved.mulch.length, 1);
+  fixture.seedMixtures[0].name = 'Changed catalogue name'; await click('← Back to bed'); await click('Refresh area references'); await click('Open area editor');
+  assert.equal(globalThis.__editorCanvas.plan.areas[0].sowing.mixture.name, 'Cover mix');
+  await type('broadcast-density', ''); await click('← Back to bed'); await click('Back to garden');
+  assert.match(document.body.textContent, /could not be saved/); await click('Discard and return');
+});
+
+test('broadcast crops use grams per square metre without a unit selector and quantities follow resizing', async () => {
+  await openBed(); await click('Add area'); await choose('area-kind', 'broadcast');
+  assert.equal(document.getElementById('broadcast-density-unit'), null);
+  assert.ok(document.body.textContent.includes('g/m²'));
+  assert.ok(!document.body.textContent.includes('Seeds per m²'));
+  await type('broadcast-density', '50');
+  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0].densityUnit, 'g_m2');
+  assert.equal(document.getElementById('broadcast-total').value, '100');
+  const area = globalThis.__editorCanvas.plan.areas[0];
+  await act(async () => globalThis.__editorCanvas.onBounds(area.id, { ...area, widthCm: 50 }));
+  assert.equal(document.getElementById('broadcast-total').value, '50');
+  await click('Recap'); assert.match(document.body.textContent, /Broadcast sowing/); assert.match(document.body.textContent, /50 g/);
 });
 
 test('bed history protects invalid edits, filters other beds activities and preserves old plan geometry',async()=>{
@@ -344,12 +369,12 @@ test('expanding a focused area autosaves the changed neighbour in the same garde
   await openBed();await click('Add area');await click('Split selected area');
   const fixture=globalThis.__editorFixture;
   const [first,second]=globalThis.__editorCanvas.plan.areas;
-  await choose('planting-area',first.id);await click('Open area editor');
+  await choose('planting-selected-area',first.id);await click('Open area editor');
   const writes=fixture.saves.length,version=fixture.currentGarden.version;
   await act(async()=>globalThis.__editorCanvas.onBounds(first.id,{...first,lengthCm:120}));
   assert.equal(fixture.saves.length,writes+1);
   assert.equal(fixture.currentGarden.version,version+1);
-  const saved=fixture.saves.at(-1).beds[0].plantingPlan.areas;
+  const saved=fixture.saves.at(-1).beds[0].areaPlan.areas;
   assert.equal(saved[0].lengthCm,120);assert.equal(saved[1].yCm,120);assert.equal(saved[1].lengthCm,80);
   assert.equal(saved[1].rowCount,second.rowCount);
   await act(async()=>globalThis.__editorCanvas.onBounds(first.id,{...first,lengthCm:175}));
@@ -369,21 +394,18 @@ test('opening an older plan and discarding invalid fields does not autosave a fo
   assert.match(document.body.textContent,/All changes saved/);
   await click('Areas');await type('planting-row-count','3');
   assert.equal(fixture.saves.length,1);
-  assert.equal(fixture.saves[0].beds[0].plantingPlan.version,5);
+  assert.equal(fixture.saves[0].beds[0].areaPlan.version,5);
 });
 
 
-test('desktop double-click opens the selected bed and planting/mulch area editor',async()=>{
-  await openBed();await click('Back to garden');
-  await act(async()=>globalThis.__gardenCanvas.onEditBed(bed.id));
-  assert.ok(document.querySelector('[data-testid="bed-canvas"]'));
-  await click('Add area');const id=globalThis.__editorCanvas.plan.areas[0].id;
-  await act(async()=>{globalThis.__editorCanvas.onSelect(id);globalThis.__editorCanvas.onOpenArea({kind:'planting',id});});
-  assert.equal(globalThis.__editorCanvas.focus.kind,'planting');assert.ok(button('← Back to bed'));
-  await click('← Back to bed');await click('Mulch');await click('Add mulch area');
-  const mulchId=globalThis.__editorCanvas.mulch.plan.areas[0].id;
-  await act(async()=>{globalThis.__editorCanvas.mulch.onSelect(mulchId);globalThis.__editorCanvas.onOpenArea({kind:'mulch',id:mulchId});});
-  assert.equal(globalThis.__editorCanvas.focus.kind,'mulch');
+test('desktop double-click opens any selected area in the shared editor', async () => {
+  await openBed(); await click('Back to garden');
+  await act(async () => globalThis.__gardenCanvas.onEditBed(bed.id));
+  await click('Add area'); const id = globalThis.__editorCanvas.plan.areas[0].id;
+  await act(async () => { globalThis.__editorCanvas.onSelect(id); globalThis.__editorCanvas.onOpenArea({ kind: 'planting', id }); });
+  assert.ok(button('← Back to bed')); await choose('area-kind', 'broadcast'); await type('broadcast-density', '10'); await click('Add mulch layer');
+  assert.equal(globalThis.__editorCanvas.focus.id, id);
+  assert.equal(globalThis.__editorCanvas.plan.areas[0].kind, 'broadcast');
 });
 
 test('the Konva bed surface opens on mouse double-click and never opens read-only snapshots',async()=>{
@@ -409,7 +431,7 @@ test('area fields reset independently, omit orientation sizes and automatic-coun
   assert.equal(document.getElementById('planting-plant-spacing').value,'10');
   await click('Open area editor');await click('Reset plant spacing');
   assert.equal(document.getElementById('planting-plant-spacing').value,'30');
-  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].plantingPlan.areas[0].rowCount,2);
+  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0].rowCount,2);
 });
 
 test('the plant-type catalogue form loads, validates and submits its border-distance property',async()=>{
@@ -443,7 +465,8 @@ test('Edit garden groups sharing, rename and size while More no longer contains 
   const more=document.querySelector('dialog');assert.ok(more);
   assert.ok(!more.textContent.includes('Edit and plan selected bed'));
   for(const label of ['Share garden','Rename garden','Garden size'])assert.ok(![...more.querySelectorAll('button')].some(item=>item.textContent===label));
-  assert.ok(more.textContent.includes('Plant catalogue'));assert.ok(more.textContent.includes('Copy bed'));
+  assert.ok(!more.textContent.includes('Plant catalogue'));assert.ok(!more.textContent.includes('Mulch catalogue'));
+  assert.ok(more.textContent.includes('Your gardens'));assert.ok(more.textContent.includes('Copy bed'));
   await click('Close');await click('Edit garden');
   const edit=document.querySelector('dialog');
   for(const label of ['Share garden','Rename garden','Garden size'])assert.ok([...edit.querySelectorAll('button')].some(item=>item.textContent===label));
@@ -455,7 +478,7 @@ test('Edit garden groups sharing, rename and size while More no longer contains 
 
 test('Recap groups plant totals by type, shows area dimensions and updates without making edits',async()=>{
   await openBed();assert.equal(button('Plan'),undefined);await click('Recap');
-  assert.match(document.querySelector('aside[aria-label="Bed recap"]').textContent,/No planting areas yet/);
+  assert.match(document.querySelector('aside[aria-label="Bed recap"]').textContent,/No areas yet/);
   await click('Add area');await click('Split selected area');
   await click('Recap');const writes=globalThis.__editorFixture.saves.length;
   const plants=document.querySelector('section[aria-label="Plants by type"]');
@@ -463,9 +486,9 @@ test('Recap groups plant totals by type, shows area dimensions and updates witho
   assert.match(plants.textContent,/Type A.*12 plants · 2 areas/);
   assert.match(document.querySelector('section[aria-label="Planting area recap"]').textContent,/100 × 100 cm/);
   const details=document.querySelector('aside[aria-label="Bed recap"]');
-  assert.match(details.textContent,/Bed surface2 m²/);assert.match(details.textContent,/Outside planting areas0 m²/);
+  assert.match(details.textContent,/Bed surface2 m²/);assert.match(details.textContent,/Outside areas0 m²/);
   assert.equal(details.querySelector('input'),null,'Recap contains no editing controls');
-  await click('Areas');assert.ok(document.querySelector('section[aria-label="Planting settings"] input[type="checkbox"]'));
+  await click('Areas');assert.equal(document.querySelector('section[aria-label="Area settings"] input[type="checkbox"]'), null);
   await type('planting-plant-spacing','10');await click('Recap');
   assert.match(document.querySelector('section[aria-label="Plants by type"]').textContent,/22 plants · 2 areas/);
   assert.equal(globalThis.__editorFixture.saves.length,writes+1,'switching menus does not save garden changes');
@@ -490,7 +513,7 @@ test('garden Recap totals plants across copied beds and shows their full footpri
 
 test('garden Recap shows zero plants while counting beds without planting plans',async()=>{
   await openBed();await click('Back to garden');await click('Recap');
-  assert.match(document.querySelector('dialog').textContent,/No planting plans in these beds yet/);
+  assert.match(document.querySelector('dialog').textContent,/No plant rows or broadcast sowing in these beds yet/);
   assert.match(document.querySelector('dialog').textContent,/Area occupied by beds2 m²/);
   assert.equal(globalThis.__editorFixture.saves.length,0);
 });
@@ -501,7 +524,7 @@ test('backdated bed edits include planting and mulch while protecting other beds
   const other={...bed,id:'other-bed',name:'Other bed',xCm:150};
   fixture.historyEvents=[{id:'past-layout',gardenId:'garden-a',kind:'layout',status:'completed',eventVersion:1,order:1,date:'2025-01-01',title:'Earlier garden',notes:'',document:{name:'Garden',dimensions:{widthCm:500,lengthCm:500},beds:[bed,other]}}];
   await click('History');await click('Add past bed edit');assert.ok(button('Save history record'));
-  assert.equal(button('History'),undefined);await click('Add area');await click('Mulch');await click('Add mulch area');
+  assert.equal(button('History'),undefined);await click('Add area');await click('Add mulch layer');
   await click('Back to garden');
   await act(async()=>{
     globalThis.__gardenCanvas.onMoveBed(other.id,{xCm:300,yCm:0});
@@ -511,7 +534,7 @@ test('backdated bed edits include planting and mulch while protecting other beds
   await click('Save history record');await type('history-edit-date','2025-02-01');await click('Save record');
   const recorded=fixture.historyEvents.find(item=>item.kind==='bed');assert.ok(recorded);
   const saved=recorded.document.beds.find(item=>item.id===bed.id);
-  assert.equal(saved.xCm,20);assert.equal(saved.plantingPlan.areas.length,1);assert.equal(saved.mulchPlan.areas.length,1);
+  assert.equal(saved.xCm,20);assert.equal(saved.areaPlan.areas.length,1);assert.equal(saved.areaPlan.areas[0].mulch.length,1);
   assert.equal(recorded.document.beds.find(item=>item.id===other.id).xCm,150);
   assert.equal(fixture.saves.length,0);
   await click('Plan');await click('← Back to bed');assert.equal(globalThis.__editorCanvas.plan.areas.length,0);
@@ -522,10 +545,198 @@ test('historical metadata corrections preserve older planting geometry until pla
   const old={...bed,plantingPlan:planV3({areas:[areaV2({rowCount:3})]})};
   fixture.historyEvents=[{id:'old-bed',gardenId:'garden-a',kind:'planting',bedId:bed.id,status:'completed',eventVersion:1,order:1,date:'2025-01-01',title:'Older bed',notes:'',document:{name:'Garden',dimensions:{widthCm:500,lengthCm:500},beds:[old]}}];
   await click('History');await click('View completed event: Older bed');await click('Edit history record');
-  assert.equal(globalThis.__editorCanvas.plan.version,3);
+  assert.equal(globalThis.__editorCanvas.plan.version,5);
   await click('Bed');await type('bed-name','Earlier name');await click('Save bed');
   await click('Save history record');await click('Save record');
   assert.deepEqual(fixture.historyEvents[0].document.beds[0].plantingPlan,old.plantingPlan);
   await click('Edit history record');await click('Areas');await type('planting-row-count','4');
   assert.equal(globalThis.__editorCanvas.plan.version,5);
+});
+
+
+test('purpose precedes planting method and green manure hides the method while keeping broadcast sowing', async () => {
+  await openBed(); await click('Add area'); await click('Add mulch layer');
+  const initial = globalThis.__editorCanvas.plan.areas[0];
+  assert.deepEqual([...document.getElementById('area-kind').options].map((option) => option.value), ['rows', 'broadcast']);
+  assert.equal(document.getElementById('area-kind').value, 'rows');
+  assert.equal(document.getElementById('area-purpose').value, 'crop');
+  assert.ok(document.getElementById('area-purpose').compareDocumentPosition(document.getElementById('area-kind')) & window.Node.DOCUMENT_POSITION_FOLLOWING);
+  const writes = globalThis.__editorFixture.saves.length;
+  await choose('area-purpose', 'green_manure');
+  assert.equal(document.getElementById('area-kind'), null);
+  assert.equal(globalThis.__editorCanvas.plan.areas[0].kind, 'broadcast');
+  assert.equal([...document.getElementById('area-purpose').options].find((option) => option.value === 'green_manure').textContent, 'Green manure');
+  assert.equal(document.body.textContent.includes('(sovescio)'), false);
+  assert.equal(globalThis.__editorFixture.saves.length, writes, 'density must be supplied before saving broadcast sowing');
+  await type('broadcast-density', '5');
+  const broadcast = globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0];
+  assert.equal(broadcast.id, initial.id); assert.equal(broadcast.widthCm, initial.widthCm); assert.deepEqual(broadcast.mulch, initial.mulch);
+  assert.equal(broadcast.purpose, 'green_manure');
+  await choose('area-purpose', 'crop');
+  assert.equal(document.getElementById('area-kind').value, 'broadcast');
+  await choose('area-kind', 'rows');
+  const rows = globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0];
+  assert.equal(rows.kind, 'rows'); assert.equal(rows.purpose, 'crop'); assert.equal(rows.mulch.length, 1);
+});
+
+
+test('areas cannot be created without a catalogue crop or seed mixture', async () => {
+  await openBed();
+  globalThis.__editorFixture.catalogue.plants = [];
+  globalThis.__editorFixture.seedMixtures.length = 0;
+  await click('Add area');
+  assert.equal(globalThis.__editorCanvas.plan.areas.length, 0);
+  assert.equal(globalThis.__editorFixture.saves.length, 0);
+  assert.match(document.body.textContent, /Add a crop or seed mixture/);
+});
+
+test('plant selection chooses a crop first, filters optional cultivars and clears the cultivar when crops change', async () => {
+  await openBed(); await click('Add area');
+  const catalogue = globalThis.__editorFixture.catalogue;
+  catalogue.plants.push({ ...catalogue.plants[0], id: 'type-b', name: 'Type B' });
+  const cultivar = { notes: '', version: 2, plantSpacingCm: 20, rowSpacingCm: null, borderDistanceCm: null, livingMulchEnabled: null };
+  catalogue.cultivars = [{ ...cultivar, id: 'var-a', plantTypeId: 'type-a', name: 'Early A' }, { ...cultivar, id: 'var-b', plantTypeId: 'type-b', name: 'Early B' }];
+  await click('Refresh area references');
+  assert.deepEqual([...document.getElementById('planting-crop').options].map((option) => option.value), ['type-a', 'type-b']);
+  assert.deepEqual([...document.getElementById('planting-cultivar').options].map((option) => option.value), ['', 'var-a']);
+  await choose('planting-cultivar', 'var-a');
+  let saved = globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0];
+  assert.equal(saved.plant.id, 'type-a'); assert.equal(saved.plant.cultivarId, 'var-a'); assert.equal(saved.plantSpacingCm, 20);
+  await choose('planting-crop', 'type-b');
+  saved = globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0];
+  assert.equal(saved.plant.id, 'type-b'); assert.equal(saved.plant.cultivarId, undefined);
+  assert.deepEqual([...document.getElementById('planting-cultivar').options].map((option) => option.value), ['', 'var-b']);
+  await choose('planting-cultivar', 'var-b');
+  catalogue.cultivars = catalogue.cultivars.filter((item) => item.id !== 'var-b'); await click('Refresh area references');
+  assert.equal(document.getElementById('planting-cultivar').value, 'var-b');
+  assert.match(document.getElementById('planting-cultivar').textContent, /Early B \(saved reference\)/);
+  await choose('planting-crop', 'type-a'); await choose('area-kind', 'broadcast');
+  await choose('broadcast-cultivar', 'var-a'); await type('broadcast-density', '5');
+  saved = globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0];
+  assert.equal(saved.sowing.kind, 'crop'); assert.equal(saved.sowing.plant.id, 'type-a'); assert.equal(saved.sowing.plant.cultivarId, 'var-a');
+  await choose('broadcast-cultivar', '');
+  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0].sowing.plant.cultivarId, undefined);
+});
+
+test('green manure offers seed mixtures only, and does not fall back to a crop when no mixtures exist', async () => {
+  await openBed(); await click('Add area'); await choose('area-purpose', 'green_manure');
+  assert.equal(document.getElementById('seed-mixture').value, 'default-mix');
+  for (const id of ['planting-crop', 'planting-cultivar', 'broadcast-crop', 'broadcast-cultivar', 'broadcast-material', 'area-kind']) assert.equal(document.getElementById(id), null);
+  await type('broadcast-density', '10');
+  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0].sowing.kind, 'mixture');
+  await choose('area-purpose', 'crop'); await type('broadcast-density', '10');
+  globalThis.__editorFixture.seedMixtures.length = 0; await click('Refresh area references');
+  const writes = globalThis.__editorFixture.saves.length;
+  await choose('area-purpose', 'green_manure'); await type('broadcast-density', '10');
+  assert.equal(document.getElementById('seed-mixture').value, '');
+  assert.match(document.body.textContent, /No seed mixtures are available/);
+  assert.equal(globalThis.__editorFixture.saves.length, writes);
+  assert.equal(document.getElementById('broadcast-crop'), null);
+});
+
+
+test('Harvest crop shows crop and optional cultivar only; mixtures remain exclusive to Green manure', async () => {
+  await openBed(); await click('Add area');
+  assert.ok(document.getElementById('planting-crop'));
+  assert.equal(document.getElementById('seed-mixture'), null);
+  await choose('area-kind', 'broadcast');
+  assert.ok(document.getElementById('broadcast-crop'));
+  assert.equal(document.getElementById('broadcast-material'), null);
+  assert.equal(document.getElementById('seed-mixture'), null);
+  await type('broadcast-density', '5'); await click('Add mulch layer');
+  await choose('area-purpose', 'green_manure'); await type('broadcast-density', '10');
+  const mixture = globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0];
+  assert.equal(mixture.sowing.kind, 'mixture'); assert.ok(document.getElementById('seed-mixture'));
+  const writes = globalThis.__editorFixture.saves.length;
+  await choose('area-purpose', 'crop');
+  assert.equal(document.getElementById('seed-mixture'), null);
+  assert.equal(document.getElementById('broadcast-material'), null);
+  assert.ok(document.getElementById('broadcast-crop'));
+  assert.equal(document.getElementById('broadcast-density').value, '');
+  assert.equal(globalThis.__editorFixture.saves.length, writes);
+  await type('broadcast-density', '6');
+  const crop = globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0];
+  assert.equal(crop.purpose, 'crop'); assert.equal(crop.sowing.kind, 'crop');
+  assert.equal(crop.id, mixture.id); assert.deepEqual(crop.mulch, mixture.mulch);
+});
+
+test('editing an older Harvest crop mixture requires choosing a crop and entering its own density', async () => {
+  const legacy = { ...areaPlan(broadcast({ purpose: 'crop' })), version: 3 };
+  await openBed({ ...bed, areaPlan: legacy }); await click('Areas');
+  assert.equal(document.getElementById('broadcast-crop').value, '');
+  assert.equal(document.getElementById('seed-mixture'), null);
+  assert.equal(document.getElementById('broadcast-material'), null);
+  assert.equal(globalThis.__editorFixture.saves.length, 0);
+  await choose('broadcast-crop', 'type-a');
+  assert.equal(document.getElementById('broadcast-density').value, '');
+  assert.equal(globalThis.__editorFixture.saves.length, 0);
+  await type('broadcast-density', '5');
+  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0].sowing.kind, 'crop');
+  assert.equal(legacy.areas[0].sowing.kind, 'mixture');
+});
+
+
+test('area names follow crop, optional cultivar and seed mixture selections without a name field', async () => {
+  await openBed({ ...bed, areaPlan: areaPlan(rows({ name: 'Old custom name' })) }); await click('Areas');
+  const fixture = globalThis.__editorFixture, catalogue = fixture.catalogue;
+  catalogue.plants.push({ ...catalogue.plants[0], id: 'type-b', name: 'Type B' });
+  catalogue.cultivars = [{ id: 'var-a', plantTypeId: 'type-a', name: 'Early A', notes: '', version: 1, plantSpacingCm: null, rowSpacingCm: null, borderDistanceCm: null, livingMulchEnabled: null }];
+  fixture.seedMixtures.push({ ...fixture.seedMixtures[0], id: 'second-mix', name: 'Second mixture' });
+  await click('Refresh area references'); await click('Open area editor');
+  assert.equal(document.getElementById('area-name'), null);
+  assert.equal(document.querySelector('h1').textContent, 'Type A');
+  await choose('planting-cultivar', 'var-a');
+  assert.equal(document.querySelector('h1').textContent, 'Early A');
+  await choose('planting-cultivar', '');
+  assert.equal(document.querySelector('h1').textContent, 'Type A');
+  await choose('planting-crop', 'type-b');
+  assert.equal(document.querySelector('h1').textContent, 'Type B');
+  await choose('area-purpose', 'green_manure'); await type('broadcast-density', '10');
+  assert.equal(document.querySelector('h1').textContent, 'Demo mixture');
+  await choose('seed-mixture', 'second-mix');
+  assert.equal(document.querySelector('h1').textContent, 'Second mixture');
+  assert.equal(document.getElementById('area-name'), null);
+  await click('← Back to bed'); await click('Areas');
+  assert.match(document.getElementById('planting-selected-area').textContent, /Second mixture/);
+  assert.ok(!document.body.textContent.includes('Old custom name'));
+  await click('Recap'); assert.match(document.body.textContent, /Second mixture/);
+  await click('Back to garden'); await click('Edit bed'); await click('Areas'); await click('Open area editor');
+  assert.equal(document.querySelector('h1').textContent, 'Second mixture');
+});
+
+
+test('adjacent areas retain all their plants without a cross-area spacing control or override warning', async () => {
+  const first = rows({ widthCm: 50, rowCount: 1, rowSpacingCm: 100, plant: { ...snapshot, rowSpacingCm: 100, borderDistanceCm: 15 } });
+  const second = { ...structuredClone(first), id: 'second', xCm: 50 };
+  await openBed({ ...bed, areaPlan: areaPlan(first, second) }); await click('Areas');
+  assert.equal(document.querySelector('section[aria-label="Area settings"] input[type="checkbox"]'), null);
+  assert.ok(!document.body.textContent.includes('Keep spacing between areas'));
+  await click('Recap');
+  assert.match(document.querySelector('section[aria-label="Plants by type"]').textContent, /12 plants · 2 areas/);
+  assert.ok(!document.body.textContent.includes('Spacing checks between different areas are overridden'));
+  assert.equal(globalThis.__editorFixture.saves.length, 0);
+});
+
+
+test('area settings contain fields and validation without explanatory paragraphs', async () => {
+  await openBed(); await click('Add area'); await click('Open area editor');
+  const controls = () => document.querySelector('aside[aria-label="Area editor controls"]');
+  assert.ok(document.getElementById('area-purpose'));
+  assert.ok(document.getElementById('planting-crop'));
+  assert.ok(document.getElementById('planting-row-count'));
+  assert.equal(controls().querySelectorAll('p').length, 0);
+  for (const text of ['Measurements and resizing stay', 'Saved reference:', 'Minimum clearances:', 'Grid spacing:', 'Your chosen rows', 'Custom spacing overrides']) assert.ok(!document.body.textContent.includes(text));
+  const writes = globalThis.__editorFixture.saves.length;
+  await type('planting-plant-spacing', '');
+  assert.equal(globalThis.__editorFixture.saves.length, writes);
+  assert.ok([...document.querySelectorAll('[role="alert"]')].some((element) => /spacing/.test(element.textContent)));
+  await type('planting-plant-spacing', '30');
+  await choose('area-purpose', 'green_manure'); await type('broadcast-density', '10');
+  assert.ok(document.getElementById('seed-mixture'));
+  assert.equal(document.getElementById('broadcast-total').readOnly, true);
+  assert.equal(document.getElementById('broadcast-total').value, '20');
+  assert.equal(document.getElementById('broadcast-component-0').readOnly, true);
+  assert.equal(document.getElementById('broadcast-component-0').value, '20');
+  assert.equal(controls().querySelectorAll('p').length, 0);
+  for (const text of ['Mixture proportions are by weight', 'Green manure is grown for the soil', 'No mulch on this area']) assert.ok(!controls().textContent.includes(text));
 });

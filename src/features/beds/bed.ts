@@ -1,8 +1,9 @@
+import type { BedAreaPlan } from '../area-editor/areaPlan';
 import type { GardenDimensions } from '../garden/garden';
 import type { BedPlantingPlan } from '../planting/plantingPlan';
 import type { BedMulchPlan } from '../mulch/mulchPlan';
 
-export type BedPlans = { plantingPlan?: BedPlantingPlan; mulchPlan?: BedMulchPlan };
+export type BedPlans = { areaPlan?: BedAreaPlan; plantingPlan?: BedPlantingPlan; mulchPlan?: BedMulchPlan };
 
 export type BedDetails = GardenDimensions & {
   name: string;

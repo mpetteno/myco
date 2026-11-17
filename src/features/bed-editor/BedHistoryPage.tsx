@@ -1,3 +1,4 @@
+import { AreaPlanCanvas } from '../area-editor/AreaPlanCanvas';
 import { ThemeToggle } from '../appearance/ThemeToggle';
 import { useEffect, useState } from 'react';
 import { EditorScreen } from '../../shared/ui/EditorScreen';
@@ -19,14 +20,14 @@ export function BedHistoryPage({ bed, history, onBack, onReload }: { bed: Bed; h
     <h1 className="min-w-0 flex-1 truncate font-semibold">{shown?.name ?? bed.name} · History</h1>
     <ThemeToggle />
   </header>} toolbar={<footer className="grid shrink-0 grid-cols-3 gap-2 border-t border-stone-200 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] dark:border-stone-800 dark:bg-stone-900">
-    <Button variant="secondary" disabled={history.saving} aria-pressed={!mulch} onClick={() => setMulch(false)}>Planting</Button>
-    <Button variant="secondary" disabled={history.saving} aria-pressed={mulch} onClick={() => setMulch(true)}>Mulch</Button>
-    <Button variant="secondary" disabled={!areaId || history.saving} onClick={() => setFocus(focus ? undefined : { kind:mulch ? 'mulch' : 'planting',id:areaId! })}>{focus ? 'Whole bed' : 'Focus area'}</Button>
+    <Button variant="secondary" disabled={history.saving} aria-pressed={!!shown?.areaPlan || !mulch} onClick={() => setMulch(false)}>{shown?.areaPlan ? 'Areas' : 'Planting'}</Button>
+    {!shown?.areaPlan && <Button variant="secondary" disabled={history.saving} aria-pressed={mulch} onClick={() => setMulch(true)}>Mulch</Button>}
+    <Button variant="secondary" disabled={!areaId || history.saving} onClick={() => setFocus(focus ? undefined : { kind:!shown?.areaPlan && mulch ? 'mulch' : 'planting',id:areaId! })}>{focus ? 'Whole bed' : 'Focus area'}</Button>
   </footer>}>
     <GardenHistoryBar history={history} bedView />
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
       <div className="min-h-0 min-w-0 flex-1">
-        {shown && !history.loading && !history.error ? <BedPlanCanvas key={`${history.selected?.id ?? 'current'}:${mulch}`} bed={shown}
+        {shown && !history.loading && !history.error ? shown.areaPlan ? <AreaPlanCanvas bed={shown} plan={shown.areaPlan} selectedId={areaId} onSelect={setAreaId} onBounds={() => {}} readOnly focus={focus} /> : <BedPlanCanvas key={`${history.selected?.id ?? 'current'}:${mulch}`} bed={shown}
           plan={shown.plantingPlan ?? { version:5,respectAreaSpacing:true,areas:[],advice:[] }} selectedId={mulch ? null : areaId}
           onSelect={setAreaId} onBounds={() => {}} editingMulch={mulch} readOnly focus={focus}
           mulch={{ plan:shown.mulchPlan ?? { version:1,areas:[] },selectedId:mulch ? areaId : null,preview:null,onSelect:setAreaId,onBounds:() => {} }} />

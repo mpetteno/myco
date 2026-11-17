@@ -6,7 +6,15 @@ import { build } from 'vite';
 mkdirSync('node_modules/.tmp', { recursive: true });
 const directory = mkdtempSync(resolve('node_modules/.tmp/myco-mulch-'));
 const repository = join(directory, 'repository.mjs');
-writeFileSync(repository, `export const loadMulchCatalogue = async () => {
+writeFileSync(repository, `import { GardenStorageError } from ${JSON.stringify(resolve('src/features/gardens/gardenErrors.ts'))};
+export const removeMulchType = async (current) => {
+  const fixture = globalThis.__mulchFixture;
+  fixture.removals.push(current);
+  if (fixture.removeError) throw new GardenStorageError('Removal failed', false, fixture.removeError === '42501' ? 'catalogue.removalAdminOnly' : 'catalogue.removalStale');
+  await fixture.remove?.();
+  fixture.data = { ...fixture.data, types: fixture.data.types.filter(item => item.id !== current.id) };
+};
+export const loadMulchCatalogue = async () => {
   const fixture = globalThis.__mulchFixture;
   if (fixture.loadError) throw fixture.loadError;
   return fixture.data;
@@ -16,7 +24,7 @@ export const saveMulchType = async (details, current) => {
   fixture.writes.push({ details, current });
   await fixture.save();
   return { id: current?.id ?? 'new-mulch', version: (current?.version ?? 0) + 1,
-    name: details.name.trim(), notes: details.notes.trim() };
+    ...details, name: details.name.trim(), notes: details.notes.trim() };
 };`);
 
 export async function loadPanel() {

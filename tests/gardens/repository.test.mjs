@@ -7,7 +7,8 @@ const repository = await loadModule('tests/gardens/modules.ts', 'repository');
 after(cleanupModules);
 const row = { id: 'garden-1', owner_id: 'owner-1', name: 'Kitchen garden', width_cm: 500,
   length_cm: 300, version: 1, updated_at: '2026-01-01', beds: [] };
-const document = { name: row.name, dimensions: { widthCm: 500, lengthCm: 300 }, beds: [] };
+const location = { enteredLocation: 'Milano', displayName: 'Milano, Lombardia, Italia', latitude: 45.46, longitude: 9.19, countryCode: 'IT', regionCode: 'IT-25' };
+const document = { name: row.name, dimensions: { widthCm: 500, lengthCm: 300 }, beds: [], location };
 function fixture(replies) {
   const requests = [];
   globalThis.__mycoAuthClient = createClient('https://garden-test.supabase.co', 'sb_publishable_fixture', {
@@ -26,7 +27,7 @@ test('creates empty gardens, lists owned and shared gardens through RLS and relo
   const requests = fixture([{ data: row }, { data: [row, shared] }, { data: [row] }]);
   const created = await repository.createGarden('owner-1', { ...document, name: ' Kitchen garden ' });
   assert.equal(created.name, 'Kitchen garden');
-  assert.deepEqual(requests[0].body, { owner_id: 'owner-1', name: row.name, width_cm: 500, length_cm: 300, beds: [] });
+  assert.deepEqual(requests[0].body, { owner_id: 'owner-1', name: row.name, width_cm: 500, length_cm: 300, beds: [], location });
   const gardens = await repository.listGardens();
   assert.equal(gardens.length, 2);
   assert.equal(gardens[1].ownerId, 'someone-else');
@@ -58,6 +59,23 @@ test('validates before sending writes and exposes missing migration, network and
   await assert.rejects(repository.listGardens(), /not available yet/);
   await assert.rejects(repository.loadGarden(row.id), /no longer available/);
   await assert.rejects(repository.createGarden('owner-1', document), /Check your connection/);
+});
+
+test('manual regions create and update location independently from the layout with revision protection', async () => {
+  const region = { countryCode: 'IT', regionCode: 'IT-25', displayName: 'Lombardia' };
+  const city = { ...region, city: 'Milano', displayName: 'Milano, Lombardia' };
+  const requests = fixture([{ data: { ...row, location: region } },
+    { data: [{ ...row, version: 2, location: city }] }, { data: [] }]);
+  await assert.rejects(repository.createGarden('owner-1', { ...document, location: undefined }), /region/);
+  assert.equal(requests.length, 0);
+  const created = await repository.createGarden('owner-1', { ...document, location: region });
+  assert.deepEqual(created.location, region);
+  const saved = await repository.saveGardenLocation(created, city);
+  assert.deepEqual(saved.location, city);
+  assert.deepEqual(requests[1].body, { location: city });
+  assert.equal(requests[1].url.searchParams.get('version'), 'eq.1');
+  await assert.rejects(repository.saveGardenLocation(created, city), (error) => error.conflict === true);
+  assert.ok(requests.every((request) => request.url.pathname === '/rest/v1/gardens'));
 });
 
 test('sharing repository calls scoped RPCs and maps member emails without exposing auth administration', async () => {

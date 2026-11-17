@@ -3,12 +3,13 @@ import type { ComponentProps } from 'react';
 type NumberFieldProps = ComponentProps<'input'> & {
   id: string;
   label: string;
+  unit?: string;
 };
 
-export function NumberField({ id, label, ...props }: NumberFieldProps) {
+export function NumberField({ id, label, unit = 'cm', ...props }: NumberFieldProps) {
   return (
     <label htmlFor={id} className="block space-y-2 text-sm font-medium">
-      <span>{label} <span className="font-normal text-stone-500 dark:text-stone-400">(cm)</span></span>
+      <span>{label} <span className="font-normal text-stone-500 dark:text-stone-400">{unit && `(${unit})`}</span></span>
       <input
         {...props}
         id={id}

@@ -1,14 +1,16 @@
+import { validGardenLocation } from './gardenLocation';
+import type { GardenLocation } from './gardenLocation';
 import { getSupabaseClient } from '../../shared/supabase/client';
 import type { GardenDocument, GardenSummary, SavedGarden } from './gardenDocument';
 import { validateGarden } from './gardenDocument';
 import { GardenStorageError, gardenStorageError } from './gardenErrors';
 
-const summaryColumns = 'id,owner_id,name,width_cm,length_cm,version,updated_at';
+const summaryColumns = 'id,owner_id,name,width_cm,length_cm,version,updated_at,location';
 const columns = `${summaryColumns},beds`;
 type Row = { id: string; owner_id: string; name: string; width_cm: number; length_cm: number;
-  version: number; updated_at: string; beds?: SavedGarden['beds'] };
+  version: number; updated_at: string; location?: GardenLocation | null; beds?: SavedGarden['beds'] };
 const summary = (row: Row): GardenSummary => ({ id: row.id, ownerId: row.owner_id, name: row.name,
-  dimensions: { widthCm: row.width_cm, lengthCm: row.length_cm }, version: row.version, updatedAt: row.updated_at });
+  dimensions: { widthCm: row.width_cm, lengthCm: row.length_cm }, version: row.version, updatedAt: row.updated_at, ...(row.location ? { location: row.location } : {}) });
 
 function saved(row: Row): SavedGarden {
   const garden = { ...summary(row), beds: row.beds ?? [] };
@@ -38,8 +40,10 @@ export async function loadGarden(id: string): Promise<SavedGarden> {
 }
 
 export async function createGarden(ownerId: string, document: GardenDocument): Promise<SavedGarden> {
+  const body = payload(document);
+  if (!validGardenLocation(document.location)) throw new GardenStorageError('Choose a supported garden region.');
   const { data, error } = await getSupabaseClient().from('gardens')
-    .insert({ ...payload(document), owner_id: ownerId }).select(columns).single();
+    .insert({ ...body, owner_id: ownerId, location: document.location }).select(columns).single();
   if (error) throw gardenStorageError(error);
   return saved(data as Row);
 }
@@ -49,5 +53,13 @@ export async function saveGarden(current: SavedGarden, document: GardenDocument)
     .eq('id', current.id).eq('version', current.version).select(columns).maybeSingle();
   if (error) throw gardenStorageError(error);
   if (!data) throw new GardenStorageError('This garden changed in another session, or your access was removed. Reload the saved version or discard changes and reload your gardens.', true);
+  return saved(data as Row);
+}
+
+export async function saveGardenLocation(current: SavedGarden, location: GardenLocation): Promise<SavedGarden> {
+  if (!validGardenLocation(location)) throw new GardenStorageError('Choose a supported garden region.');
+  const { data, error } = await getSupabaseClient().from('gardens').update({ location }).eq('id', current.id).eq('version', current.version).select(columns).maybeSingle();
+  if (error) throw gardenStorageError(error);
+  if (!data) throw new GardenStorageError('Garden changed; reload before changing its location.', true);
   return saved(data as Row);
 }

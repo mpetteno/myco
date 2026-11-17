@@ -9,15 +9,18 @@ import type { Catalogue, CompanionRule, PlantDetails, PlantFamily, PlantType } f
 import { PlantEntryForm } from './PlantEntryForm';
 import { CompanionRuleForm } from './CompanionRuleForm';
 
-export function PlantCataloguePanel({ userId }: { userId: string }) {
+export function PlantCataloguePanel({ userId, section, onEditingChange }: { userId: string; section: CatalogueSection; onEditingChange?: (editing: boolean) => void }) {
   const [data, setData] = useState<Catalogue | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
-  const [section, setSection] = useState<CatalogueSection>('families');
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<{ current?: CatalogueSelection } | null>(null);
   const [message, setMessage] = useState('');
+  useEffect(() => {
+    onEditingChange?.(!!editing);
+    return () => onEditingChange?.(false);
+  }, [editing, onEditingChange]);
   useEffect(() => {
     let alive = true;
     setLoading(true); setError(''); setEditing(null);
@@ -55,13 +58,8 @@ export function PlantCataloguePanel({ userId }: { userId: string }) {
   const cannotAdd = section === 'plants' ? data.families.length === 0 : section === 'companions' && data.families.length + data.plants.length === 0;
   return <div className="space-y-4">
     <p className="text-sm leading-relaxed text-stone-600 dark:text-stone-400">An app-wide reference catalogue. {data.isAdmin ? 'You are a catalogue administrator and can add or edit entries.' : 'Catalogue administrators manage these entries.'} Spacing and companion rules are recommendations; planning will allow exceptions.</p>
-    <div className="grid grid-cols-3 gap-1" aria-label="Catalogue sections">
-      {([['families', 'Families'], ['plants', 'Plant types'], ['companions', 'Companions']] as const).map(([value, label]) =>
-        <button key={value} type="button" aria-pressed={section === value} onClick={() => { setSection(value); setSearch(''); setMessage(''); }}
-          className="min-h-12 cursor-pointer rounded-lg border border-stone-300 px-2 text-sm aria-pressed:border-green-700 aria-pressed:bg-green-50 focus-visible:outline-2 focus-visible:outline-green-600 dark:border-stone-700 dark:aria-pressed:bg-green-950">{label}</button>)}
-    </div>
     <TextField id="catalogue-search" label="Search catalogue" type="search" value={search} onChange={(event) => setSearch(event.target.value)} />
-    {data.isAdmin && <Button disabled={cannotAdd} onClick={() => { setEditing({}); setMessage(''); }}>Add {section === 'families' ? 'family' : section === 'plants' ? 'plant type' : 'companion rule'}</Button>}
+    {data.isAdmin && <Button disabled={cannotAdd} onClick={() => { setEditing({}); setMessage(''); }}>Add {section === 'families' ? 'family' : section === 'plants' ? 'crop' : 'companion rule'}</Button>}
     {data.isAdmin && cannotAdd && <p className="text-sm text-stone-600 dark:text-stone-400">Add a plant family first.</p>}
     <p role="status" className="text-sm text-green-800 empty:hidden dark:text-green-400">{message}</p>
     <CatalogueEntries data={data} section={section} search={search} onEdit={(current) => { setEditing({ current }); setMessage(''); }} />

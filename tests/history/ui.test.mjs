@@ -192,14 +192,14 @@ test('default garden planning autosaves bed edits without history and keeps reco
   assert.match(document.body.textContent,/only after implementing this entire garden plan/);
   await type('event-title','Rows implemented');await click('Record garden changes');
   assert.equal(fixture.historyEvents.length,1);
-  assert.equal(fixture.historyEvents[0].document.beds[0].plantingPlan.areas[0].rowCount,2);
+  assert.equal(fixture.historyEvents[0].document.beds[0].areaPlan.areas[0].rowCount,2);
   await click('Close history');await click('Edit bed');await click('Areas');await type('planting-row-count','3');
-  assert.equal(fixture.saves.at(-1).beds[0].plantingPlan.areas[0].rowCount,3);
+  assert.equal(fixture.saves.at(-1).beds[0].areaPlan.areas[0].rowCount,3);
   assert.equal(fixture.historyEvents.length,1);
-  assert.equal(fixture.historyEvents[0].document.beds[0].plantingPlan.areas[0].rowCount,2,'new planning cannot rewrite completed history');
+  assert.equal(fixture.historyEvents[0].document.beds[0].areaPlan.areas[0].rowCount,2,'new planning cannot rewrite completed history');
   await click('Back to garden');await click('History');await click('Previous event');
-  assert.equal(globalThis.__gardenCanvas.beds[0].plantingPlan.areas[0].rowCount,2);
-  await click('Plan');assert.equal(globalThis.__gardenCanvas.beds[0].plantingPlan.areas[0].rowCount,3);
+  assert.equal(globalThis.__gardenCanvas.beds[0].areaPlan.areas[0].rowCount,2);
+  await click('Plan');assert.equal(globalThis.__gardenCanvas.beds[0].areaPlan.areas[0].rowCount,3);
 });
 
 

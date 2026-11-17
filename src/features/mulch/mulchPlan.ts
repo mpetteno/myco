@@ -28,6 +28,7 @@ export function validateMulchPlan(value: unknown, size: GardenDimensions): strin
       if (!layer || !validId(layer.id) || layerIds.has(layer.id) || !material || !validId(material.id)
         || typeof material.name !== 'string' || !material.name.trim() || material.name.trim().length > 100
         || typeof material.notes !== 'string' || material.notes.length > 2000 || !Number.isSafeInteger(material.version) || material.version < 1) return 'Choose a mulch type for every layer.';
+      if ([material.categoryId, material.plantTypeId, material.cultivarId].some((id) => id != null && !validId(id)) || (material.cultivarId != null && material.plantTypeId == null)) return 'Invalid saved living mulch reference.';
       layerIds.add(layer.id);
     }
     if (plan.areas.some((other) => other && ids.has(other.id) && area.xCm < other.xCm + other.widthCm && area.xCm + area.widthCm > other.xCm

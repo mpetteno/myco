@@ -39,9 +39,10 @@ export function usePlantingDraft(bed: Bed, userId: string, preserveFormat = fals
     if (areas) setPlan({ ...plan, areas });
   }
   function choosePlant(id: string) {
-    const type = catalogue?.plants.find((item) => item.id === id);
+    const cultivar = id.startsWith('cultivar:') ? catalogue?.cultivars?.find((item) => item.id === id.slice(9)) : undefined;
+    const type = catalogue?.plants.find((item) => item.id === (cultivar?.plantTypeId ?? id));
     if (!selected || !type || !catalogue) return;
-    const plant = snapshotPlant(type, catalogue);
+    const plant = snapshotPlant(type, catalogue, cultivar);
     updateArea(selected.id, { plant, plantSpacingCm: plant.plantSpacingCm ?? 0, rowSpacingCm: plant.rowSpacingCm ?? (selected.rowCount != null ? 5 : 0) });
   }
   function addArea() {

@@ -8,6 +8,8 @@ mkdirSync('node_modules/.tmp', { recursive: true });
 const directory = mkdtempSync(resolve('node_modules/.tmp/myco-editor-'));
 const catalogue = join(directory, 'catalogue.mjs');
 const mulch = join(directory, 'mulch.mjs');
+const mixtures = join(directory, 'mixtures.mjs');
+writeFileSync(mixtures, 'export const loadSeedMixtures = async () => globalThis.__editorFixture.seedMixtures ?? [];');
 const repository = join(directory, 'repository.mjs');
 const canvas = join(directory, 'canvas.mjs');
 const gardenCanvas = join(directory, 'garden-canvas.mjs');
@@ -19,8 +21,10 @@ writeFileSync(catalogue, `export const loadCatalogue = async () => globalThis.__
   export const saveFamily = async () => { throw Error('Unexpected catalogue write'); };
   export const savePlant = saveFamily; export const saveRule = saveFamily;`);
 writeFileSync(mulch, `export const loadMulchCatalogue = async () => globalThis.__editorFixture.mulchCatalogue ?? { types: [], isAdmin: false };
+  export const removeMulchType = async () => { throw Error('Unexpected mulch catalogue removal'); };
   export const saveMulchType = async () => { throw Error('Unexpected mulch catalogue write'); };`);
-writeFileSync(repository, `export const saveGarden = async (current, document) => {
+writeFileSync(repository, `export const saveGardenLocation = async (current, location) => ({ ...current, location, version: current.version + 1 });
+export const saveGarden = async (current, document) => {
   globalThis.__editorFixture.saves.push(document);
   await globalThis.__editorFixture.save();
   const next={ ...current, ...document, version: current.version + 1 };globalThis.__editorFixture.currentGarden=next;return next;
@@ -31,6 +35,7 @@ export const loadGarden = async (id) => {
 };`);
 writeFileSync(canvas, `import { createElement } from 'react';
   export const BedPlantingMarks = () => null;
+  export const AreaPlanCanvas = (props) => { globalThis.__areaCanvas = props; globalThis.__editorCanvas = props; return createElement('div', { 'data-testid': 'bed-canvas' }); };
   export const BedPlanCanvas = (props) => { globalThis.__editorCanvas = props; return createElement('div', { 'data-testid': 'bed-canvas' }); };`);
 writeFileSync(gardenCanvas, `import { createElement } from 'react';
   export const GardenCanvas = (props) => { globalThis.__gardenCanvas = props;
@@ -95,8 +100,9 @@ export async function loadEditor() {
     plugins: [{ name: 'editor-fixtures', enforce: 'pre', resolveId(source) {
       if (source.endsWith('/catalogueRepository')) return catalogue;
       if (source.endsWith('/mulchCatalogueRepository')) return mulch;
+      if (source.endsWith('/seedMixtureRepository')) return mixtures;
       if (source.endsWith('/gardenRepository')) return repository;
-      if (source.endsWith('/BedPlanCanvas') || source.endsWith('/BedPlantingMarks')) return canvas;
+      if (source.endsWith('/BedPlanCanvas') || source.endsWith('/BedPlantingMarks') || source.endsWith('/AreaPlanCanvas')) return canvas;
       if (source.endsWith('/GardenCanvas')) return gardenCanvas;
       if (source.endsWith('/historyRepository')) return history;
       if (source.endsWith('/historyEditingRepository')) return editing;

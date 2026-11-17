@@ -1,3 +1,5 @@
+import { validateAreaPlan } from '../area-editor/areaPlan';
+import type { GardenLocation } from './gardenLocation';
 import type { Bed } from '../beds/bed';
 import { bedsOverlap, isInsideGarden } from '../beds/bed';
 import type { GardenDimensions } from '../garden/garden';
@@ -5,12 +7,12 @@ import { previewPlanting } from '../planting/plantingGeometry';
 import { validatePlantingPlan } from '../planting/plantingPlan';
 import { validateMulchPlan } from '../mulch/mulchPlan';
 
-export type GardenDocument = { name: string; dimensions: GardenDimensions; beds: Bed[] };
+export type GardenDocument = { name: string; dimensions: GardenDimensions; beds: Bed[]; location?: GardenLocation };
 export type GardenSummary = {
   id: string; ownerId: string; name: string; dimensions: GardenDimensions;
-  version: number; updatedAt: string;
+  version: number; updatedAt: string; location?: GardenLocation;
 };
-export type SavedGarden = GardenSummary & { beds: Bed[] };
+export type SavedGarden = GardenSummary & { beds: Bed[]; location?: GardenLocation };
 
 export function validateGarden(document: GardenDocument): string | null {
   if (!document.name.trim() || document.name.trim().length > 100) return 'Enter a garden name of 1 to 100 characters.';
@@ -27,6 +29,11 @@ export function validateGarden(document: GardenDocument): string | null {
       return 'A bed has invalid dimensions or a position outside the garden.';
     }
     if (document.beds.some((other) => ids.has(other.id) && bedsOverlap(bed, other))) return 'Beds cannot overlap.';
+    if (bed.areaPlan !== undefined) {
+      if (bed.plantingPlan !== undefined || bed.mulchPlan !== undefined) return 'Use one area plan per bed.';
+      const invalid = validateAreaPlan(bed.areaPlan, bed);
+      if (invalid) return invalid;
+    }
     if (bed.plantingPlan !== undefined) {
       const invalid = validatePlantingPlan(bed.plantingPlan, bed);
       if (invalid) return invalid;

@@ -1,3 +1,4 @@
+import { snapshotMulchMaterial } from '../mulch-catalogue/mulchCatalogue';
 import { useEffect, useState } from 'react';
 import type { Bed, BedBounds } from '../beds/bed';
 import { loadMulchCatalogue } from '../mulch-catalogue/mulchCatalogueRepository';
@@ -23,6 +24,7 @@ export function useMulchDraft(bed: Bed, userId: string) {
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [userId, attempt]);
+  const available = catalogue?.types.filter((item) => item.available !== false) ?? [];
   const selected = plan.areas.find((area) => area.id === selectedId);
   function updateArea(id: string, values: Partial<MulchArea>) {
     setPlan((current) => ({ ...current, areas: current.areas.map((area) => area.id === id ? { ...area, ...values } : area) }));
@@ -31,22 +33,22 @@ export function useMulchDraft(bed: Bed, userId: string) {
     const areas = resizeAreas(plan.areas, id, next, bed);
     if (areas) setPlan({ ...plan, areas });
   }
-  const newLayer = (material: MulchType) => ({ id: crypto.randomUUID(), material: structuredClone(material) });
+  const newLayer = (material: MulchType) => ({ id: crypto.randomUUID(), material: snapshotMulchMaterial(material) });
   function addArea() {
     setError('');
-    if (!catalogue?.types.length || plan.areas.length >= MAX_MULCH_AREAS) return;
+    if (!available.length || plan.areas.length >= MAX_MULCH_AREAS) return;
     const position = freeMulchArea(bed, plan.areas);
     if (!position) { setError('No free mulch space. Resize or remove an existing mulch area first.'); return; }
-    const area = { ...position, id: crypto.randomUUID(), name: `Mulch area ${plan.areas.length + 1}`, layers: [newLayer(catalogue.types[0])] };
+    const area = { ...position, id: crypto.randomUUID(), name: `Mulch area ${plan.areas.length + 1}`, layers: [newLayer(available[0])] };
     setPlan({ ...plan, areas: [...plan.areas, area] }); setSelectedId(area.id); setPreview(null);
   }
   function addLayer() {
-    if (!selected || !catalogue?.types.length || selected.layers.length >= MAX_MULCH_LAYERS) return;
-    updateArea(selected.id, { layers: [...selected.layers, newLayer(catalogue.types[0])] }); setPreview(null);
+    if (!selected || !available.length || selected.layers.length >= MAX_MULCH_LAYERS) return;
+    updateArea(selected.id, { layers: [...selected.layers, newLayer(available[0])] }); setPreview(null);
   }
   function chooseMaterial(layerId: string, materialId: string) {
     const material = catalogue?.types.find((item) => item.id === materialId);
-    if (selected && material) updateArea(selected.id, { layers: selected.layers.map((layer) => layer.id === layerId ? { ...layer, material: structuredClone(material) } : layer) });
+    if (selected && material && material.available !== false) updateArea(selected.id, { layers: selected.layers.map((layer) => layer.id === layerId ? { ...layer, material: snapshotMulchMaterial(material) } : layer) });
   }
   function reorderLayer(id: string, direction: -1 | 1) {
     if (selected) updateArea(selected.id, { layers: reorderMulchLayer(selected.layers, id, direction) });

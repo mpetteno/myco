@@ -21,8 +21,11 @@ function fixture(handler) {
 }
 
 test('loads global mulch types and only the current account administrator membership', async () => {
-  const requests = fixture(({ url }) => ({ data: url.pathname.endsWith('mulch_types') ? [row] : [{ user_id: 'admin-a' }] }));
-  assert.deepEqual(await repository.loadMulchCatalogue('admin-a'), { types: [row], isAdmin: true });
+  const requests = fixture(({ url }) => ({ data: url.pathname.endsWith('mulch_types') ? [row] : url.pathname.endsWith('catalogue_administrators') ? [{ user_id: 'admin-a' }] : [] }));
+  const loaded = await repository.loadMulchCatalogue('admin-a');
+  assert.equal(loaded.isAdmin, true);
+  assert.deepEqual(loaded.types, [{ ...row, categoryId: null, plantTypeId: null, cultivarId: null, categoryCode: undefined, available: true }]);
+  assert.deepEqual(loaded.categories, []);
   assert.equal(requests[0].url.searchParams.get('order'), 'name.asc');
   assert.equal(requests[1].url.searchParams.get('user_id'), 'eq.admin-a');
   fixture(({ url }) => ({ data: url.pathname.endsWith('mulch_types') ? [row] : [] }));
@@ -33,7 +36,7 @@ test('saves only trimmed details and checks the loaded revision on edits', async
   const requests = fixture(({ method }) => ({ data: method === 'PATCH' ? [{ ...row, version: 2 }] : row }));
   const details = { name: ' Straw ', notes: ' Dry material ' };
   const created = await repository.saveMulchType(details);
-  assert.deepEqual(requests[0].body, { name: 'Straw', notes: 'Dry material' });
+  assert.deepEqual(requests[0].body, { name: 'Straw', notes: 'Dry material', category_id: null, plant_type_id: null, cultivar_id: null });
   const updated = await repository.saveMulchType(details, created);
   assert.equal(updated.version, 2);
   assert.equal(requests[1].url.searchParams.get('id'), 'eq.mulch-a');
@@ -54,4 +57,14 @@ test('validates before writing and reports duplicates, revoked access, conflicts
   await assert.rejects(repository.saveMulchType(row, row), /entry changed/);
   fixture(() => ({ data: { code: 'PGRST205' }, status: 404 }));
   await assert.rejects(repository.loadMulchCatalogue('admin-a'), /mulch catalogue is not available/);
+});
+
+test('removes mulch through the admin RPC with the loaded revision and reports failures',async()=>{
+  const requests=fixture(()=>({data:null}));
+  await repository.removeMulchType(row);
+  assert.equal(requests[0].url.pathname,'/rest/v1/rpc/myco_remove_mulch_type');
+  assert.deepEqual(requests[0].body,{entry_id:row.id,expected_version:row.version});
+  for(const [code,message] of [['42501',/Only catalogue administrators/],['40001',/changed or was already removed/],['PGRST202',/not available yet/],['unknown',/Could not remove/]]){
+    fixture(()=>({data:{code},status:400}));await assert.rejects(repository.removeMulchType(row),message);
+  }
 });

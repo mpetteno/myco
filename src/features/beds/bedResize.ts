@@ -1,3 +1,4 @@
+import { areasFit } from '../area-editor/areaPlan';
 import { GRID_SIZE_CM, snapToGridCm } from '../garden/garden';
 import type { GardenDimensions } from '../garden/garden';
 import { bedsOverlap, isInsideGarden } from './bed';
@@ -25,6 +26,7 @@ export function canResizeBed(bed: Bed, garden: GardenDimensions, beds: Bed[]) {
   return values.every((value) => Number.isSafeInteger(value) && value % GRID_SIZE_CM === 0)
     && bed.widthCm >= GRID_SIZE_CM && bed.lengthCm >= GRID_SIZE_CM
     && isInsideGarden(bed, garden)
+    && areasFit(bed.areaPlan, bed)
     && plantingAreasFit(bed.plantingPlan, bed)
     && mulchAreasFit(bed.mulchPlan, bed)
     && !beds.some((other) => other.id !== bed.id && bedsOverlap(bed, other));

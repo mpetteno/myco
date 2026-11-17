@@ -20,7 +20,12 @@ export function GardenRecap({ garden }: { garden: GardenDocument }) {
       <ul className="space-y-2">{recap.plants.map((plant) => <li key={plant.id} className="flex justify-between gap-3">
         <span className="min-w-0 break-words">{plant.name}</span><span className="shrink-0">{plant.plants.toLocaleString()} plants</span>
       </li>)}</ul>
-    </section> : <p className="text-stone-600 dark:text-stone-400">{garden.beds.length ? 'No planting plans in these beds yet.' : 'No beds yet. Use Add bed to start your garden.'}</p>}
+    </section> : recap.sowings.length ? null : <p className="text-stone-600 dark:text-stone-400">{garden.beds.length ? 'No plant rows or broadcast sowing in these beds yet.' : 'No beds yet. Use Add bed to start your garden.'}</p>}
+    {recap.sowings.length > 0 && <section aria-label="Broadcast seed quantities" className="space-y-2"><h3 className="font-semibold">Broadcast seed quantities</h3>
+      <ul className="space-y-2">{recap.sowings.map((sowing) => <li key={sowing.id}><span className="font-medium">{sowing.name}</span> · {Number(sowing.quantity.toFixed(4))} {sowing.unit}
+        <span className="block text-xs text-stone-600 dark:text-stone-400">{sowing.bedName}{sowing.greenManure ? ' · Green manure' : ''}</span>
+      </li>)}</ul>
+    </section>}
     <p className="text-xs text-stone-600 dark:text-stone-400">Totals reflect the displayed garden layout. Bed area includes each full bed rectangle.</p>
   </div>;
 }
