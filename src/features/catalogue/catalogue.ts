@@ -3,7 +3,7 @@ export type Spacing = { plantSpacingCm: number | null; rowSpacingCm: number | nu
 export type PlantFamily = CatalogueRecord & Spacing;
 export type PlantType = CatalogueRecord & Spacing & { familyId: string; borderDistanceCm: number; scientificName?: string; livingMulchEnabled?: boolean };
 export const DEFAULT_BORDER_DISTANCE_CM = 15;
-export type CompanionTarget = { kind: 'family' | 'plant'; id: string };
+export type CompanionTarget = { kind: 'family' | 'plant' | 'cultivar'; id: string };
 export type CompanionRule = { id: string; first: CompanionTarget; second: CompanionTarget;
   relationship: 'companion' | 'caution'; notes: string; version: number };
 export type Catalogue = { families: PlantFamily[]; plants: PlantType[]; rules: CompanionRule[]; cultivars?: PlantCultivar[]; isAdmin: boolean };
@@ -51,12 +51,13 @@ export function recommendedPairSpacing(first: Spacing, second: Spacing): Spacing
     rowSpacingCm: larger(first.rowSpacingCm, second.rowSpacingCm) };
 }
 
-export function companionAdvice(first: Pick<PlantType, 'id' | 'familyId'>, second: Pick<PlantType, 'id' | 'familyId'>, rules: CompanionRule[]) {
-  const matches = (target: CompanionTarget, plant: Pick<PlantType, 'id' | 'familyId'>) => target.kind === 'plant'
+export function companionAdvice(first: Pick<PlantType, 'id' | 'familyId'> & { cultivarId?: string }, second: Pick<PlantType, 'id' | 'familyId'> & { cultivarId?: string }, rules: CompanionRule[]) {
+  const matches = (target: CompanionTarget, plant: Pick<PlantType, 'id' | 'familyId'> & { cultivarId?: string }) => target.kind === 'cultivar' ? target.id === plant.cultivarId : target.kind === 'plant'
     ? target.id === plant.id : target.id === plant.familyId;
   const matching = rules.filter((rule) => (matches(rule.first, first) && matches(rule.second, second))
     || (matches(rule.first, second) && matches(rule.second, first)));
-  const specificity = (rule: CompanionRule) => Number(rule.first.kind === 'plant') + Number(rule.second.kind === 'plant');
+  // A cultivar endpoint outranks even two crop endpoints.
+  const specificity = (rule: CompanionRule) => ({ family: 0, plant: 1, cultivar: 3 }[rule.first.kind] + { family: 0, plant: 1, cultivar: 3 }[rule.second.kind]);
   const priority = Math.max(-1, ...matching.map(specificity));
   const applicable = matching.filter((rule) => specificity(rule) === priority);
   return { relationship: applicable.length === 0 ? 'unknown' as const

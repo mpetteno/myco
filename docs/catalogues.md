@@ -32,7 +32,8 @@ companion suggestion or a caution, with optional explanatory notes. The same
 pair applies in both directions, so reversed duplicates are rejected. Rules
 between the same family are also supported. Missing rules mean unknown.
 
-Specificity determines advice: plant/plant rules take priority over plant/family
+Specificity determines advice: cultivar rules take priority over crop and family rules.
+Among crop/family rules, plant/plant rules take priority over plant/family
 rules, which take priority over family/family rules. When equally specific rules
 disagree, caution takes priority and both rules remain available for explanation.
 
@@ -120,8 +121,34 @@ family, crop and material IDs remain unchanged. The hierarchy is **Family → Cr
 can carry an optional scientific name; botanical species are not another table.
 Select a crop without specifying a cultivar when the variety is unknown.
 
-The **Catalogue section** selector includes cultivars, care, planting depths,
-companions, rotation, calendars and coverage, plus mulch materials and categories. Every signed-in user can browse; only catalogue administrators can
+The **Catalogue section** selector includes families, crops, cultivars, seed mixtures,
+calendars and coverage, plus mulch materials and categories. Select a crop or cultivar
+name, or **View details**, to open one page containing its identity, spacing, notes,
+**Care guidance**, **Planting depths**, **Companions**, **Rotation rules** and **Growing
+calendar**. All sections are visible together, without tabs or collapsed panels.
+Administrators can edit every field directly. One persistent **Save** button saves
+the entire crop or cultivar, including relationships and calendar windows, as one
+transaction. Nothing is written until Save. **Discard changes** restores the whole
+loaded draft; unsaved changes prevent navigation and warn before closing the page.
+Failed saves keep every edit. The form checks crop/cultivar revisions as well as
+changed guidance rows and inherited sources; stale or invalid changes roll back
+all writes. Ordinary users see the same fields without editing controls.
+
+The owner is fixed while editing. Empty care and spacing fields use the crop/family
+recommendation shown in the field. Explicit **No** remains an override. Planting
+depths are shown for every method; clearing an owned depth restores its inherited
+value (or unknown). Editing an inherited companion, rotation or calendar row creates
+an override for the selected crop/cultivar and preserves the source. Removing owned
+rows takes effect with Save and can be undone before saving.
+
+Apply `202611170028_crop_editor.sql` after 027 to enable the administrator-only
+`myco_save_crop_editor` transaction. It permits only named catalogue fields and
+rows belonging to the selected owner. Direct table deletion stays unavailable.
+
+Apply `202611170027_catalogue_cultivar_relationships.sql` to add cultivar endpoints
+for companions and rotations, preserving existing rule IDs and administrator access.
+Relationship changes advance the affected crop/cultivar revisions. Cultivar removal
+also removes relationships that reference it. Every signed-in user can browse; only catalogue administrators can
 create or edit records. Garden owners/editors receive no catalogue privileges.
 This applies to all new tables and the calendar-writing RPC, not just the UI.
 Role provisioning remains outside the app. Administrator removal is limited to
@@ -130,8 +157,8 @@ cultivars and mulch types.
 Cultivars inherit individual spacing, border distance and living-mulch eligibility
 fields from their crop. Crop spacing still inherits family defaults. Care records
 inherit each non-null field; explicit `false` overrides `true`. Planting depths
-inherit by planting method. Rotation and companion rules are inherited from the
-crop. Guidance changes advance the owning crop/cultivar revision. Saved planting
+inherit by planting method. Rotation and companion rules inherit from the crop and family, with optional
+cultivar-specific relationships. Guidance changes advance the owning crop/cultivar revision. Saved planting
 references include optional cultivar ID, name and revision alongside the crop
 identity and resolved spacing. Recaps distinguish cultivars.
 
@@ -141,8 +168,7 @@ and watering notes. Depths distinguish seed, crown, bulb, tuber, sucker, offset
 and plant methods. This is reference guidance; no work is scheduled automatically.
 
 Rotation rules are directional (`favourable_after` or `avoid_after`), unlike
-symmetric companion rules. Each endpoint references either a crop or family,
-never both. Broad source groups are expanded into explicit relationships during
+symmetric companion rules. Each endpoint references exactly one crop, cultivar or family. Broad source groups are expanded into explicit relationships during
 import and their original labels are retained as notes.
 
 ### Calendar and location

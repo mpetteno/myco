@@ -17,6 +17,13 @@ const fixtures = {
     export const saveFamily = (...args) => save('families', ...args);
     export const savePlant = (...args) => save('plants', ...args);
     export const saveRule = (...args) => save('rules', ...args);`,
+  cropEditorRepository: `
+    import { cropChanges,cropDetailsPayload } from ${JSON.stringify(resolve('src/features/catalogue/cropEditor.ts'))};
+    export const saveCropEditor=async(cropId,cultivarId,version,cropVersion,draft,initial)=>{
+      if(globalThis.__page.saveWait) await globalThis.__page.saveWait;
+      if(globalThis.__page.saveError) throw {code:'40001'};
+      globalThis.__page.writes.push({table:'crop_editor',cropId,cultivarId,version,cropVersion,details:cropDetailsPayload(draft),changes:cropChanges(draft,initial,cropId,cultivarId)});
+    };`,
   seedMixtureRepository: `
     export const loadSeedMixtures = async () => structuredClone(globalThis.__page.mixtures);
     export const saveSeedMixture = async (details, current) => {
@@ -75,6 +82,11 @@ afterEach(async () => { if (root) await act(async () => root.unmount()); root = 
 after(async () => { dom.window.close(); await rm(directory, { recursive: true, force: true }); });
 const button = (text) => [...document.querySelectorAll('button')].find((item) => item.textContent.trim() === text && !item.closest('[hidden]'));
 async function click(text) { assert.ok(button(text), 'Missing ' + text); await act(async () => button(text).click()); }
+async function clickIn(headingId, label) {
+  const section = document.getElementById(headingId).closest('section');
+  const target = [...section.querySelectorAll('button')].find((item) => item.textContent.trim() === label);
+  assert.ok(target, `Missing ${label} in ${headingId}`); await act(async () => target.click());
+}
 async function change(id, value) {
   const element = document.getElementById(id); assert.ok(element, 'Missing ' + id);
   await act(async () => {
@@ -86,7 +98,7 @@ function fixture(isAdmin = true) {
   const family = { id: 'family', name: 'Cucurbitaceae', notes: '', plantSpacingCm: 100, rowSpacingCm: 120, version: 1 };
   const crop = { ...family, id: 'crop', name: 'Watermelon', familyId: family.id, borderDistanceCm: 15, livingMulchEnabled: false };
   const references = Object.fromEntries(['plant_cultivars', 'plant_guidance', 'plant_depths', 'calendar_profiles', 'calendar_coverage', 'plant_calendar_entries', 'rotation_rules', 'mulch_categories', 'calendar_windows'].map((table) => [table, []]));
-  Object.assign(references, { isAdmin, plant_types: [crop], plant_families: [family],
+  Object.assign(references, { isAdmin, plant_types: [{...crop,family_id:family.id,scientific_name:'',plant_spacing_cm:100,row_spacing_cm:120,border_distance_cm:15,living_mulch_enabled:false}], plant_families: [{...family,plant_spacing_cm:100,row_spacing_cm:120}],
     plant_cultivars: [{ id: 'cultivar', name: 'Crimson Sweet', plant_type_id: crop.id, notes: '', version: 1 }],
     plant_guidance: [{ id: 'care', plant_type_id: crop.id, cultivar_id: null, sun_requirement: 'full_sun', version: 1 }],
     plant_depths: [{ id: 'depth', plant_type_id: crop.id, cultivar_id: null, planting_method: 'seed', depth_cm: 2, notes: '', version: 1 }],
@@ -105,20 +117,21 @@ async function open(Component, props, data = fixture()) {
   globalThis.__page = data; root = createRoot(document.getElementById('root'));
   await act(async () => root.render(createElement(Component, props)));
 }
-const sections = ['families', 'plants', 'plant_cultivars', 'seed_mixtures', 'plant_guidance', 'plant_depths', 'companions', 'rotation_rules', 'calendar_profiles', 'calendar_coverage', 'plant_calendar_entries', 'materials', 'mulch_categories'];
+const sections = ['families', 'plants', 'plant_cultivars', 'seed_mixtures', 'calendar_profiles', 'calendar_coverage', 'plant_calendar_entries', 'materials', 'mulch_categories'];
 
 test('one page reaches every catalogue section and protects active administrator forms', async () => {
   let backs = 0;
   await open(CataloguePage, { userId: 'admin', onBack: () => backs++ });
+  assert.deepEqual([...document.querySelectorAll('#catalogue-section option')].map((item) => item.value), sections);
   assert.deepEqual([...document.querySelectorAll('#catalogue-section optgroup')].map((item) => item.label), ['Plants', 'Calendar', 'Mulch']);
   for (const section of sections) {
     await change('catalogue-section', section);
     assert.equal(document.getElementById('reference-section'), null);
-    if (section === 'companions') await click('Add companion rule'); else await click('Edit');
+    if (section === 'plants' || section === 'plant_cultivars') { await click('View details'); await change('details-name', 'Changed'); } else await click('Edit');
     assert.equal(document.getElementById('catalogue-section').disabled, true, section);
     assert.equal(button('Back to gardens').disabled, true, section);
     await click('Back to gardens'); assert.equal(backs, 0);
-    await click('Back to catalogue');
+    await click(section === 'plants' || section === 'plant_cultivars' ? 'Discard changes' : 'Back to catalogue');
     assert.equal(document.getElementById('catalogue-section').disabled, false, section);
   }
   await change('catalogue-section', 'plant_calendar_entries'); await click('Edit');
@@ -193,4 +206,75 @@ test('mixture editing validates total weight, preserves failed edits and saves c
   assert.equal(saved.table, 'seed_mixtures'); assert.equal(saved.current.version, 3);
   assert.deepEqual(saved.details.components, [{ plantTypeId: 'crop', cultivarId: 'cultivar', percentage: 60 }, { plantTypeId: 'crop', cultivarId: null, percentage: 40 }]);
   assert.equal(document.getElementById('catalogue-section').disabled, false);
+});
+
+test('all fields edit directly and one Save submits the complete crop draft; failures preserve it', async () => {
+  const data=fixture();await open(CataloguePage,{userId:'admin',onBack:()=>{}},data);
+  await click('Watermelon');
+  assert.equal(document.querySelectorAll('form').length,1);
+  assert.equal(document.querySelectorAll('button[type="submit"]').length,1);
+  assert.equal(button('Save').disabled,true);
+  assert.equal(button('Edit'),undefined);assert.equal(button('Edit details'),undefined);
+  assert.equal(document.querySelectorAll('h4').length,6);
+  await change('details-name','Better melon');
+  await change('care-monthly_feed','false');await change('depth-seed-depth_cm','3');
+  await change('depth-seed-notes','Shallow sowing');
+  await click('Add companion');
+  assert.ok([...document.querySelectorAll('option')].some(option=>option.textContent==='Companion suggestion'));
+  const companion=document.querySelector('[id$="-target"]');
+  await change(companion.id,'plant:crop');
+  data.saveError=true;await click('Save');
+  assert.match(document.body.textContent,/changed/);
+  assert.equal(document.getElementById('details-name').value,'Better melon');
+  assert.equal(document.getElementById('depth-seed-depth_cm').value,'3');
+  assert.equal(document.getElementById('catalogue-section').disabled,true);
+  assert.equal(data.writes.length,0);
+  data.saveError=false;await click('Save');
+  assert.equal(data.writes.length,1);
+  const saved=data.writes[0];assert.equal(saved.table,'crop_editor');assert.equal(saved.details.name,'Better melon');
+  assert.equal(saved.changes.find(row=>row.table==='plant_guidance').details.monthly_feed,false);
+  assert.equal(saved.changes.find(row=>row.table==='plant_depths').details.depth_cm,3);
+  assert.equal(saved.changes.find(row=>row.table==='companion_rules').details.plant_a_id,'crop');
+  assert.equal(button('Save').disabled,true);assert.equal(document.getElementById('catalogue-section').disabled,false);
+  assert.match(document.body.textContent,/All changes saved/);
+});
+
+test('cultivar edits preserve inheritance and save care, depths, rotation and calendar overrides together',async()=>{
+  const data=fixture();await open(CataloguePage,{userId:'admin',onBack:()=>{}},data);
+  await change('catalogue-section','plant_cultivars');await click('Crimson Sweet');
+  assert.equal(document.getElementById('care-sun_requirement').value,'');
+  assert.equal(document.getElementById('details-notes').placeholder,'');
+  assert.equal(document.getElementById('depth-seed-depth_cm').getAttribute('aria-label'),'Seed Depth (cm)');
+  assert.match(document.getElementById('care-sun_requirement').textContent,/Use crop default: Full sun/);
+  assert.equal(document.getElementById('depth-seed-depth_cm').placeholder,'Inherited: 2');
+  await change('care-monthly_feed','false');await change('depth-seed-depth_cm','4');
+  await change('rotation-rotation-relationship','favourable_after');
+  assert.match(document.getElementById('crop-rotation-heading').closest('section').textContent,/Unsaved override/);
+  await change('calendar-entry-window-0-start_month','5');
+  await click('Save');assert.equal(data.writes.length,1);
+  const saved=data.writes[0];assert.equal(saved.cultivarId,'cultivar');
+  assert.deepEqual(saved.changes.map(row=>row.table),['plant_guidance','plant_depths','rotation_rules','plant_calendar_entries']);
+  assert.equal(saved.changes[0].details.sun_requirement,null);
+  assert.equal(saved.changes[0].details.monthly_feed,false);
+  assert.equal(saved.changes[1].id,null);assert.equal(saved.changes[1].details.cultivar_id,'cultivar');
+  assert.equal(saved.changes[2].details.current_cultivar_id,'cultivar');assert.equal(saved.changes[2].details.current_family_id,null);
+  assert.deepEqual(saved.changes[3].windows,[{start_month:5,end_month:6}]);assert.equal(saved.changes[3].id,null);
+});
+
+test('readers see the whole page without editing or saving controls',async()=>{
+  await open(CataloguePage,{userId:'reader',onBack:()=>{}},fixture(false));
+  await click('Watermelon');assert.equal(document.querySelectorAll('h4').length,6);
+  assert.equal(button('Save'),undefined);assert.equal(button('Add companion'),undefined);
+  assert.ok([...document.querySelectorAll('form input,form select,form textarea')].every(field=>field.disabled));
+});
+
+test('discard restores the entire draft and pending saves block duplicate requests and navigation',async()=>{
+  const data=fixture();await open(CataloguePage,{userId:'admin',onBack:()=>{}},data);await click('View details');
+  await change('details-name','Discard me');await click('Add companion');await click('Discard changes');
+  assert.equal(document.getElementById('details-name').value,'Watermelon');assert.equal(button('Save').disabled,true);
+  await change('details-name','Keep me');
+  let release;data.saveWait=new Promise(resolve=>{release=resolve});
+  await click('Save');assert.equal(button('Save').disabled,true);assert.equal(document.getElementById('details-name').disabled,true);
+  assert.equal(button('Discard changes').disabled,true);await click('Save');
+  await act(async()=>release());assert.equal(data.writes.length,1);assert.equal(data.writes[0].details.name,'Keep me');
 });

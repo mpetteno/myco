@@ -38,3 +38,17 @@ test('cultivar removal passes the selected ID and revision and explains dependen
     fixture(()=>({data:{code},status:400}));await assert.rejects(repo.removeCultivar({id:'datterini',version:4}),message);
   }
 });
+
+test('the crop editor submits a single RPC for the complete draft and preserves permission/stale errors', async()=>{
+  const initial={details:{name:'Crop',notes:'',plant_spacing_cm:'',row_spacing_cm:'',border_distance_cm:'15',living_mulch_enabled:'false',family_id:'family',scientific_name:''},rows:[]};
+  const draft=structuredClone(initial);draft.details.name='Renamed';
+  const requests=fixture(()=>({data:null}));
+  await repo.saveCropEditor('crop',undefined,4,4,draft,initial);
+  assert.equal(requests.length,1);assert.equal(requests[0].url.pathname,'/rest/v1/rpc/myco_save_crop_editor');
+  assert.equal(requests[0].body.expected_version,4);assert.equal(requests[0].body.expected_crop_version,4);
+  assert.equal(requests[0].body.details.name,'Renamed');assert.equal(requests[0].body.details.plant_spacing_cm,null);
+  assert.equal(requests[0].body.details.living_mulch_enabled,false);
+  assert.deepEqual(requests[0].body.changes,[]);
+  fixture(()=>({data:{code:'40001'},status:409}));await assert.rejects(repo.saveCropEditor('crop',undefined,4,4,draft,initial),/changed/);
+  fixture(()=>({data:{code:'42501'},status:403}));await assert.rejects(repo.saveCropEditor('crop',undefined,4,4,draft,initial),/Only catalogue administrators/);
+});

@@ -7,16 +7,16 @@ import type { Catalogue, FamilyDetails, PlantDetails, RuleDetails, PlantFamily, 
 type FamilyRow = { id: string; name: string; notes: string; plant_spacing_cm: number | null; row_spacing_cm: number | null; version: number };
 type PlantRow = FamilyRow & { family_id: string; border_distance_cm: number; scientific_name?: string; living_mulch_enabled?: boolean };
 type RuleRow = { id: string; family_a_id: string | null; plant_a_id: string | null; family_b_id: string | null;
-  plant_b_id: string | null; relationship: CompanionRule['relationship']; notes: string; version: number };
+  plant_b_id: string | null; cultivar_a_id?: string | null; cultivar_b_id?: string | null; relationship: CompanionRule['relationship']; notes: string; version: number };
 const familyColumns = 'id,name,notes,plant_spacing_cm,row_spacing_cm,version';
 const plantColumns = `${familyColumns},family_id,border_distance_cm,scientific_name,living_mulch_enabled`;
-const ruleColumns = 'id,family_a_id,plant_a_id,family_b_id,plant_b_id,relationship,notes,version';
+const ruleColumns = 'id,family_a_id,plant_a_id,family_b_id,plant_b_id,cultivar_a_id,cultivar_b_id,relationship,notes,version';
 const family = (row: FamilyRow): PlantFamily => ({ id: row.id, name: row.name, notes: row.notes,
   plantSpacingCm: row.plant_spacing_cm, rowSpacingCm: row.row_spacing_cm, version: row.version });
 const plant = (row: PlantRow): PlantType => ({ ...family(row), familyId: row.family_id, borderDistanceCm: row.border_distance_cm ?? DEFAULT_BORDER_DISTANCE_CM, scientificName: row.scientific_name ?? '', livingMulchEnabled: row.living_mulch_enabled ?? false });
 const rule = (row: RuleRow): CompanionRule => ({ id: row.id, notes: row.notes, relationship: row.relationship, version: row.version,
-  first: row.family_a_id ? { kind: 'family', id: row.family_a_id } : { kind: 'plant', id: row.plant_a_id! },
-  second: row.family_b_id ? { kind: 'family', id: row.family_b_id } : { kind: 'plant', id: row.plant_b_id! } });
+  first: row.cultivar_a_id ? { kind: 'cultivar', id: row.cultivar_a_id } : row.family_a_id ? { kind: 'family', id: row.family_a_id } : { kind: 'plant', id: row.plant_a_id! },
+  second: row.cultivar_b_id ? { kind: 'cultivar', id: row.cultivar_b_id } : row.family_b_id ? { kind: 'family', id: row.family_b_id } : { kind: 'plant', id: row.plant_b_id! } });
 
 export async function loadCatalogue(userId: string): Promise<Catalogue> {
   const client = getSupabaseClient();
@@ -62,5 +62,7 @@ export async function saveRule(details: RuleDetails, current?: CompanionRule): P
   const [a, b] = orderedTargets(details.first, details.second);
   return rule(await write('companion_rules', ruleColumns, { family_a_id: a.kind === 'family' ? a.id : null,
     plant_a_id: a.kind === 'plant' ? a.id : null, family_b_id: b.kind === 'family' ? b.id : null,
-    plant_b_id: b.kind === 'plant' ? b.id : null, relationship: details.relationship, notes: details.notes.trim() }, current) as RuleRow);
+    plant_b_id: b.kind === 'plant' ? b.id : null,
+    cultivar_a_id: a.kind === 'cultivar' ? a.id : null, cultivar_b_id: b.kind === 'cultivar' ? b.id : null,
+    relationship: details.relationship, notes: details.notes.trim() }, current) as RuleRow);
 }

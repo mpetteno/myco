@@ -4,3 +4,6 @@ export * from '../../src/features/catalogue/catalogue';
 export * from '../../src/features/planting/plantingPlan';
 export * from '../../src/features/mulch-catalogue/mulchCatalogue';
 export * from '../../src/features/gardens/gardenLocation';
+
+export * from '../../src/features/catalogue/cropEditor';
+export * from '../../src/features/catalogue/cropEditorRepository';

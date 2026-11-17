@@ -16,7 +16,7 @@ export type CalendarCoverage = ReferenceRow & { calendar_profile_id: string; cou
 export type PlantCalendarEntry = ReferenceRow & GuidanceOwner & { calendar_profile_id: string; activity: CalendarActivity; planting_method: PlantingMethod; notes: string };
 export type CalendarWindow = ReferenceRow & { calendar_entry_id: string; start_month: number; end_month: number };
 export type RotationRule = ReferenceRow & { current_family_id: string | null; current_plant_id: string | null;
-  previous_family_id: string | null; previous_plant_id: string | null; relationship: 'favourable_after' | 'avoid_after'; notes: string };
+  previous_family_id: string | null; previous_plant_id: string | null; current_cultivar_id?: string | null; previous_cultivar_id?: string | null; relationship: 'favourable_after' | 'avoid_after'; notes: string };
 export type ReferenceData = {
   plant_cultivars: ReferenceRow[]; plant_guidance: CareGuidance[]; plant_depths: PlantDepth[];
   calendar_profiles: CalendarProfile[]; calendar_coverage: CalendarCoverage[]; plant_calendar_entries: PlantCalendarEntry[];

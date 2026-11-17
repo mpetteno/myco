@@ -12,10 +12,10 @@ import type { FamilyDetails, PlantDetails, PlantFamily, PlantType } from './cata
 
 type PlantEntryFormProps = {
   kind: 'family' | 'plant'; families: PlantFamily[]; current?: PlantFamily | PlantType;
-  onSave: (details: PlantDetails | FamilyDetails) => Promise<void>; onCancel: () => void;
+  onSave: (details: PlantDetails | FamilyDetails) => Promise<void>; cancelLabel?: string; onCancel: () => void;
 };
 
-export function PlantEntryForm({ kind, families, current, onSave, onCancel }: PlantEntryFormProps) {
+export function PlantEntryForm({ kind, families, current, onSave, onCancel, cancelLabel }: PlantEntryFormProps) {
   const { t } = useI18n();
   const [scientificName, setScientificName] = useState(current && 'familyId' in current ? current.scientificName ?? '' : '');
   const [livingMulchEnabled, setLivingMulchEnabled] = useState(current && 'familyId' in current ? current.livingMulchEnabled ?? false : false);
@@ -57,6 +57,6 @@ export function PlantEntryForm({ kind, families, current, onSave, onCancel }: Pl
     <TextField id="catalogue-entry-notes" label="Notes (optional)" maxLength={2000} value={notes} disabled={pending} onChange={(event) => setNotes(event.target.value)} />
     <p role="alert" className="text-sm text-red-700 empty:hidden dark:text-red-400">{error}</p>
     <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Save entry'}</Button>
-    <Button type="button" variant="secondary" disabled={pending} onClick={onCancel}>Back to catalogue</Button>
+    <Button type="button" variant="secondary" disabled={pending} onClick={onCancel}>{cancelLabel ?? 'Back to catalogue'}</Button>
   </form>;
 }

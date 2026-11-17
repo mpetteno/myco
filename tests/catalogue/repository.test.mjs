@@ -57,7 +57,7 @@ test('canonicalizes companion pairs and writes suggestions and warnings without 
   const requests = fixture(() => ({ data: ruleRow }));
   await repository.saveRule({ first: { kind: 'plant', id: plantRow.id }, second: { kind: 'family', id: familyRow.id }, relationship: 'caution', notes: ' Optional warning ' });
   assert.deepEqual(requests[0].body, { family_a_id: familyRow.id, plant_a_id: null, family_b_id: null, plant_b_id: plantRow.id,
-    relationship: 'caution', notes: 'Optional warning' });
+    cultivar_a_id: null, cultivar_b_id: null, relationship: 'caution', notes: 'Optional warning' });
 });
 
 test('validates before writes and reports permission, duplicate and stale-entry errors', async () => {
@@ -71,4 +71,15 @@ test('validates before writes and reports permission, duplicate and stale-entry 
   await assert.rejects(repository.saveFamily(details), /already exists/);
   fixture(() => ({ data: [] }));
   await assert.rejects(repository.saveFamily(details, { id: familyRow.id, version: 1 }), /changed or your administrator access/);
+});
+
+test('cultivar companion endpoints are canonicalized, persisted and loaded distinctly', async () => {
+  const row = { ...ruleRow, family_a_id: null, cultivar_a_id: 'variety', cultivar_b_id: null };
+  const requests = fixture(() => ({ data: row }));
+  const saved = await repository.saveRule({ first: { kind: 'plant', id: plantRow.id }, second: { kind: 'cultivar', id: 'variety' }, relationship: 'companion', notes: '' });
+  assert.equal(requests[0].body.cultivar_a_id, 'variety');
+  assert.equal(requests[0].body.plant_a_id, null);
+  assert.equal(requests[0].body.family_a_id, null);
+  assert.equal(requests[0].body.plant_b_id, plantRow.id);
+  assert.deepEqual(saved.first, { kind: 'cultivar', id: 'variety' });
 });

@@ -15,10 +15,6 @@ const groups = [
     { id: 'plants', label: 'catalogue.crops' },
     { id: 'plant_cultivars', label: 'catalogue.label.cultivars' },
     { id: 'seed_mixtures', label: 'catalogue.seedMixtures' },
-    { id: 'plant_guidance', label: 'catalogue.label.care_guidance' },
-    { id: 'plant_depths', label: 'catalogue.label.planting_depths' },
-    { id: 'companions', label: 'catalogue.companions' },
-    { id: 'rotation_rules', label: 'catalogue.label.rotation_rules' },
   ] },
   { label: 'catalogue.calendar', sections: [
     { id: 'calendar_profiles', label: 'catalogue.label.calendars' },
@@ -56,7 +52,7 @@ export function CataloguePage({ userId, onBack }: { userId: string; onBack: () =
         {editing && <p role="status" className="text-sm">{t('catalogue.finishEdit')}</p>}
         <section aria-labelledby="catalogue-heading" className="space-y-4">
           <h2 id="catalogue-heading" className="text-lg font-semibold">{t(label)}</h2>
-          {section === 'families' || section === 'plants' || section === 'companions'
+          {section === 'families' || section === 'plants'
             ? <PlantCataloguePanel key={section} userId={userId} section={section} onEditingChange={setEditing} />
             : section === 'seed_mixtures'
               ? <SeedMixturePanel userId={userId} onEditingChange={setEditing} />

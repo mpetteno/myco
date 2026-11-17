@@ -15,13 +15,27 @@ export const removeCultivar=async(current)=>{
   fixture.data.plant_cultivars=fixture.data.plant_cultivars.filter(item=>item.id!==current.id);
 };
 export const saveReference=async(...args)=>{globalThis.__referenceUI.writes.push(args);if(globalThis.__referenceUI.error)throw globalThis.__referenceUI.error;};`);
+const catalogueRepository=join(directory,'catalogue.mjs');
+await writeFile(catalogueRepository, `
+  export const loadCatalogue=async()=>{
+    const data=globalThis.__referenceUI.data;
+    return { isAdmin:data.isAdmin, rules:[],
+      families:data.plant_families.map(row=>({...row,plantSpacingCm:row.plant_spacing_cm ?? null,rowSpacingCm:row.row_spacing_cm ?? null})),
+      plants:data.plant_types.map(row=>({...row,familyId:row.family_id,plantSpacingCm:row.plant_spacing_cm ?? null,rowSpacingCm:row.row_spacing_cm ?? null})),
+      cultivars:data.plant_cultivars.map(row=>({...row,plantTypeId:row.plant_type_id,plantSpacingCm:row.plant_spacing_cm ?? null,rowSpacingCm:row.row_spacing_cm ?? null,borderDistanceCm:row.border_distance_cm ?? null,livingMulchEnabled:row.living_mulch_enabled ?? null})) };
+  };
+  export const savePlant=async()=>{};
+  export const saveRule=async()=>{};
+`);
+const cropEditorRepository=join(directory,'crop-editor.mjs');
+await writeFile(cropEditorRepository, `export const saveCropEditor=async(...args)=>{globalThis.__referenceUI.writes.push(args);if(globalThis.__referenceUI.error)throw globalThis.__referenceUI.error;};`);
 const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/'});
 for(const key of ['window','document','HTMLElement','Element','HTMLInputElement','HTMLSelectElement','Event'])globalThis[key]=dom.window[key];
 window.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','');};
 window.HTMLDialogElement.prototype.close=function(){this.removeAttribute('open');};
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 const {act,createElement}=await import('react'),{createRoot}=await import('react-dom/client');
-const result=await build({configFile:false,envFile:false,logLevel:'silent',plugins:[{name:'reference-fixtures',enforce:'pre',resolveId(source){if(source.endsWith('/referenceRepository'))return repository;}}],build:{write:false,minify:false,lib:{entry:'tests/catalogue/reference-ui-modules.ts',formats:['es']},rolldownOptions:{external:['react','react/jsx-runtime']}}});
+const result=await build({configFile:false,envFile:false,logLevel:'silent',plugins:[{name:'reference-fixtures',enforce:'pre',resolveId(source){if(source.endsWith('/referenceRepository'))return repository;if(source.endsWith('/catalogueRepository'))return catalogueRepository;if(source.endsWith('/cropEditorRepository'))return cropEditorRepository;}}],build:{write:false,minify:false,lib:{entry:'tests/catalogue/reference-ui-modules.ts',formats:['es']},rolldownOptions:{external:['react','react/jsx-runtime']}}});
 const output=(Array.isArray(result)?result[0]:result).output;
 const file=join(directory,'ui.mjs');await writeFile(file,output.find((item)=>item.type==='chunk').code);
 const {ReferenceCataloguePanel,GardenCreateForm,GardenLocationForm}=await import(pathToFileURL(file).href);
@@ -40,11 +54,11 @@ test('readers browse cultivar guidance without management controls; admin errors
   assert.equal(button('Remove'),undefined);
   await act(async()=>root.unmount());root=null;
   await open(ReferenceCataloguePanel,{userId:'admin'},{...data,isAdmin:true});
-  await click('Edit');await change('reference-plant_spacing_cm','130');
-  globalThis.__referenceUI.error={code:'40001'};await click('Save entry');
-  assert.match(document.body.textContent,/changed/);assert.equal(document.getElementById('reference-plant_spacing_cm').value,'130');
-  assert.equal(globalThis.__referenceUI.writes[0][1].row_spacing_cm,null);
-  assert.equal(globalThis.__referenceUI.writes[0][2].version,1);
+  await click('View details');await change('details-plant_spacing_cm','130');
+  globalThis.__referenceUI.error={code:'40001'};await click('Save');
+  assert.match(document.body.textContent,/changed/);assert.equal(document.getElementById('details-plant_spacing_cm').value,'130');
+  assert.equal(globalThis.__referenceUI.writes[0][4].details.row_spacing_cm,'');
+  assert.equal(globalThis.__referenceUI.writes[0][2],1);
 });
 
 test('cultivar removal is admin-only, reports living-mulch dependencies and is unavailable in other sections',async()=>{
@@ -55,7 +69,7 @@ test('cultivar removal is admin-only, reports living-mulch dependencies and is u
   await click('Remove');globalThis.__referenceUI.removeError='23503';await click('Remove from catalogue');
   assert.match(document.querySelector('dialog').textContent,/used by a living mulch type/);
   assert.equal(globalThis.__referenceUI.removals[0].id,'datterini');assert.equal(globalThis.__referenceUI.removals[0].version,4);
-  assert.ok(button('Edit'));globalThis.__referenceUI.removeError=null;await click('Remove from catalogue');
+  assert.ok(button('View details'));globalThis.__referenceUI.removeError=null;await click('Remove from catalogue');
   assert.equal(document.querySelector('dialog'),null);assert.equal(button('Remove'),undefined);
   assert.match(document.body.textContent,/Catalogue entry removed/);
   await change('reference-section','calendar_profiles');assert.ok(button('Edit'));assert.equal(button('Remove'),undefined);

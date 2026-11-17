@@ -43,3 +43,12 @@ test('catalogue distances are positive centimetre recommendations; blank means i
   for (const value of [0, -5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])
     assert.ok(model.validateSpacing({ plantSpacingCm: value, rowSpacingCm: 10 }));
 });
+
+test('cultivar companion overrides are symmetric and isolated to that cultivar', () => {
+  const rules = [rule(plant(a.id), plant(b.id), 'caution'),
+    rule({ kind: 'cultivar', id: 'variety' }, family('b'), 'companion')];
+  assert.equal(model.companionAdvice({ ...a, cultivarId: 'variety' }, b, rules).relationship, 'companion');
+  assert.equal(model.companionAdvice(b, { ...a, cultivarId: 'variety' }, rules).relationship, 'companion');
+  assert.equal(model.companionAdvice({ ...a, cultivarId: 'other' }, b, rules).relationship, 'caution');
+  assert.equal(model.companionAdvice(a, b, rules).relationship, 'caution');
+});
