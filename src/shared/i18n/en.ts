@@ -1,5 +1,10 @@
+import { suggestionMessages } from '../../features/suggestions/suggestionMessages';
 import { referenceMessages } from '../../features/catalogue-reference/referenceText';
 export const en = {
+  'keyboard.areaCopied': 'Copied “{name}”.',
+  'keyboard.areaPasted': 'Pasted “{name}”.',
+  'keyboard.areaNoSpace': 'This area cannot be pasted here. Check available space, the area limit and any invalid settings.',
+  ...suggestionMessages,
   ...referenceMessages,
   'location.title': 'Garden location',
   'location.region': 'Region',
@@ -17,6 +22,16 @@ export const en = {
   'catalogue.cancelEdit': 'Cancel',
   'catalogue.companionSuggestion': 'Companion suggestion',
   'catalogue.unsavedOverride': 'Unsaved override',
+  'catalogue.suggestedCompanions': 'Suggestions',
+  'catalogue.favourablePredecessors': 'Favourable after',
+  'catalogue.avoidPredecessors': 'Avoid after',
+  'catalogue.unknownPlant': 'Unknown plant',
+  'catalogue.noLinkedPlants': 'No plants linked.',
+  'catalogue.moveRelationship': 'Move {name} to {list}',
+  'catalogue.undoRelationship': 'Restore {name}',
+  'catalogue.addToRelationship': 'Add to {list}',
+  'catalogue.chooseLinkedPlant': 'Choose a crop, cultivar or family',
+  'catalogue.relationshipInheritance': 'Inherited links come from the crop or family. Move them to the other list to create an override. Removing an override restores the inherited recommendation after saving.',
   'catalogue.useCrop': 'Use crop default',
   'catalogue.editPageHint': 'Edit the fields below. Save all changes together when you’re done.',
   'catalogue.readPageHint': 'Crop details and growing recommendations.',

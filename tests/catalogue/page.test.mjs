@@ -31,7 +31,7 @@ const fixtures = {
       globalThis.__page.writes.push({ table: 'seed_mixtures', details, current });
     };`,
   referenceRepository: `
-    export const loadReferenceData = async () => structuredClone(globalThis.__page.references);
+    export const loadReferenceData = async () => { if(globalThis.__page.referenceError) throw new Error('Offline'); return structuredClone(globalThis.__page.references); };
     export const saveReference = async (table, details, current, windows) => {
       if (globalThis.__page.saveError) throw { code: '40001' };
       globalThis.__page.writes.push({ table, details, current, windows });
@@ -46,13 +46,14 @@ const fixtures = {
     export const removeMulchType = async () => {};`,
   useGardens: 'export const useGardens = () => globalThis.__page.store;',
   GardenPage: `import { createElement, useEffect, useState } from 'react';
-    export function GardenPage({ pickerOpen, onChooseGardens }) {
+    export function GardenPage({ pickerOpen, onChooseGardens, onOpenCatalogue }) {
       const [draft, setDraft] = useState(0);
       useEffect(() => { globalThis.__page.mounts++; }, []);
       return createElement('main', { 'data-testid': 'garden', 'data-paused': pickerOpen },
         createElement('p', { id: 'draft-value' }, String(draft)),
         createElement('button', { onClick: () => setDraft(draft + 1) }, 'Edit fixture plan'),
-        createElement('button', { onClick: onChooseGardens }, 'Your gardens'));
+        createElement('button', { onClick: onChooseGardens }, 'Your gardens'),
+        createElement('button', { onClick: onOpenCatalogue }, 'Open catalogue from garden'));
     }`,
   AccountPanel: 'export const AccountPanel = () => null;',
 };
@@ -63,6 +64,8 @@ for (const [name, source] of Object.entries(fixtures)) {
 }
 const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: 'http://localhost/' });
 for (const key of ['window', 'document', 'HTMLElement', 'Element', 'HTMLInputElement', 'HTMLSelectElement', 'Event']) globalThis[key] = dom.window[key];
+globalThis.requestAnimationFrame = (callback) => { callback(); return 0; };
+window.HTMLElement.prototype.scrollIntoView = function () {};
 window.HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
 window.HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -76,18 +79,25 @@ const built = await build({ configFile: false, envFile: false, logLevel: 'silent
 const output = (Array.isArray(built) ? built[0] : built).output;
 const file = join(directory, 'ui.mjs');
 await writeFile(file, output.find((item) => item.type === 'chunk').code);
-const { CataloguePage, GardensWorkspace } = await import(pathToFileURL(file).href);
+const { CataloguePage, GardensWorkspace, GrowingCalendar } = await import(pathToFileURL(file).href);
 let root;
 afterEach(async () => { if (root) await act(async () => root.unmount()); root = null; });
 after(async () => { dom.window.close(); await rm(directory, { recursive: true, force: true }); });
 const button = (text) => [...document.querySelectorAll('button')].find((item) => item.textContent.trim() === text && !item.closest('[hidden]'));
-async function click(text) { assert.ok(button(text), 'Missing ' + text); await act(async () => button(text).click()); }
+async function click(text) { if (!button(text) && ['Gardens','Catalogue','Growing calendar'].includes(text) && button('Menu')) await act(async()=>button('Menu').click()); assert.ok(button(text), 'Missing ' + text); await act(async () => button(text).click()); }
 async function clickIn(headingId, label) {
   const section = document.getElementById(headingId).closest('section');
   const target = [...section.querySelectorAll('button')].find((item) => item.textContent.trim() === label);
   assert.ok(target, `Missing ${label} in ${headingId}`); await act(async () => target.click());
 }
 async function change(id, value) {
+  if (id === 'catalogue-section') {
+    const labels = { families:'Families', plants:'Crops', plant_cultivars:'Cultivars', seed_mixtures:'Seed mixtures', calendar_profiles:'Configure calendars', calendar_coverage:'Configure calendar coverage', plant_calendar_entries:'Growing calendar', materials:'Mulch materials', mulch_categories:'Configure mulch categories' };
+    const group = ['families','plants','plant_cultivars','seed_mixtures'].includes(value) ? 'Plants' : ['materials','mulch_categories'].includes(value) ? 'Mulch' : 'Calendar';
+    await click(group);
+    const target = [...document.querySelectorAll('[aria-label="Catalogue sections"] button')].find(item=>item.textContent.trim()===labels[value]);
+    assert.ok(target, 'Missing section '+value); await act(async()=>target.click()); return;
+  }
   const element = document.getElementById(id); assert.ok(element, 'Missing ' + id);
   await act(async () => {
     Object.getOwnPropertyDescriptor(element.tagName === 'SELECT' ? window.HTMLSelectElement.prototype : window.HTMLInputElement.prototype, 'value').set.call(element, value);
@@ -119,44 +129,31 @@ async function open(Component, props, data = fixture()) {
 }
 const sections = ['families', 'plants', 'plant_cultivars', 'seed_mixtures', 'calendar_profiles', 'calendar_coverage', 'plant_calendar_entries', 'materials', 'mulch_categories'];
 
-test('one page reaches every catalogue section and protects active administrator forms', async () => {
-  let backs = 0;
-  await open(CataloguePage, { userId: 'admin', onBack: () => backs++ });
-  assert.deepEqual([...document.querySelectorAll('#catalogue-section option')].map((item) => item.value), sections);
-  assert.deepEqual([...document.querySelectorAll('#catalogue-section optgroup')].map((item) => item.label), ['Plants', 'Calendar', 'Mulch']);
-  for (const section of sections) {
-    await change('catalogue-section', section);
-    assert.equal(document.getElementById('reference-section'), null);
-    if (section === 'plants' || section === 'plant_cultivars') { await click('View details'); await change('details-name', 'Changed'); } else await click('Edit');
-    assert.equal(document.getElementById('catalogue-section').disabled, true, section);
-    assert.equal(button('Back to gardens').disabled, true, section);
-    await click('Back to gardens'); assert.equal(backs, 0);
-    await click(section === 'plants' || section === 'plant_cultivars' ? 'Discard changes' : 'Back to catalogue');
-    assert.equal(document.getElementById('catalogue-section').disabled, false, section);
-  }
-  await change('catalogue-section', 'plant_calendar_entries'); await click('Edit');
-  await change('window-0-start_month', '5');
-  globalThis.__page.saveError = true; await click('Save entry');
-  assert.equal(document.getElementById('catalogue-section').disabled, true);
-  assert.equal(document.getElementById('window-0-start_month').value, '5');
-  globalThis.__page.saveError = false; await click('Save entry');
-  assert.equal(document.getElementById('catalogue-section').disabled, false);
-  assert.deepEqual(globalThis.__page.writes.at(-1).windows, [{ start_month: 5, end_month: 6 }]);
-  await change('catalogue-section', 'materials'); await click('Remove');
-  assert.equal(button('Back to gardens').disabled, true);
-  await click('Cancel'); assert.equal(button('Back to gardens').disabled, false);
-  await click('Back to gardens'); assert.equal(backs, 1);
+test('grouped navigation protects unsaved edits, handles failed saves, and permits discard', async () => {
+  let backs=0; const data=fixture();
+  await open(CataloguePage,{userId:'admin',onBack:()=>backs++},data);
+  assert.deepEqual([...document.querySelectorAll('[aria-label="Catalogue groups"] button')].map(item=>item.textContent),['Plants','Mulch']);
+  await click('View details'); await change('details-name','Changed');
+  await click('Back to gardens'); assert.equal(backs,0); await click('Stay');
+  assert.equal(document.getElementById('details-name').value,'Changed');
+  data.saveError=true; await click('Back to gardens'); await click('Save and leave');
+  assert.equal(backs,0); assert.equal(document.getElementById('details-name').value,'Changed');
+  await click('Stay'); data.saveError=false;
+  await click('Back to gardens'); await click('Save and leave'); assert.equal(backs,1);
+  assert.equal(data.writes.at(-1).details.name,'Changed');
+  await change('details-name','Discard me'); await click('Mulch');
+  await click('Discard and leave'); assert.ok(button('Add mulch type'));
+  await click('Plants'); assert.equal(document.getElementById('details-name').value,'Watermelon');
 });
 
-test('ordinary users browse all sections without catalogue management controls', async () => {
-  await open(CataloguePage, { userId: 'reader', onBack: () => {} }, fixture(false));
-  for (const section of sections) {
-    await change('catalogue-section', section);
-    assert.equal(button('Edit'), undefined, section);
-    assert.equal(button('Remove'), undefined, section);
-    assert.equal([...document.querySelectorAll('button')].some((item) => /^Add /.test(item.textContent)), false, section);
+test('ordinary users browse groups without administrator configuration or editing controls', async () => {
+  await open(CataloguePage,{userId:'reader',onBack:()=>{}},fixture(false));
+  for (const group of ['Plants','Mulch']) {
+    await click(group);
+    assert.equal(button('Edit'),undefined); assert.equal(button('Remove'),undefined);
+    assert.equal([...document.querySelectorAll('[aria-label="Catalogue sections"] button')].some(item=>item.textContent.startsWith('Configure')),false);
   }
-  assert.equal(globalThis.__page.writes.length, 0);
+  assert.equal(globalThis.__page.writes.length,0);
 });
 
 function withStore(active) {
@@ -166,7 +163,7 @@ function withStore(active) {
   return data;
 }
 test('workspace opens a dedicated catalogue and returns without remounting or losing the editor draft', async () => {
-  const active = { id: 'garden', name: 'Kitchen garden', ownerId: 'admin', dimensions: { widthCm: 500, lengthCm: 500 } };
+  const active = { beds: [], id: 'garden', name: 'Kitchen garden', ownerId: 'admin', dimensions: { widthCm: 500, lengthCm: 500 } };
   await open(GardensWorkspace, { user: { id: 'admin' } }, withStore(active));
   await click('Edit fixture plan'); await click('Your gardens'); await click('Catalogue');
   assert.equal(document.querySelector('dialog'), null);
@@ -185,9 +182,23 @@ test('workspace opens a dedicated catalogue and returns without remounting or lo
 test('catalogue is available before creating a garden', async () => {
   await open(GardensWorkspace, { user: { id: 'admin' } }, withStore(null));
   assert.equal(button('Plant catalogue'), undefined); assert.equal(button('Mulch catalogue'), undefined);
-  await click('Catalogue'); assert.ok(document.getElementById('catalogue-section'));
+  await click('Catalogue'); assert.ok(document.querySelector('[aria-label="Catalogue groups"]'));
   await click('Back to gardens'); assert.ok(button('Create a garden'));
   assert.equal(document.querySelector('dialog'), null);
+});
+
+test('direct garden catalogue navigation returns straight to the preserved draft', async () => {
+  const active = { beds: [], id: 'garden', name: 'Kitchen garden', ownerId: 'admin', dimensions: { widthCm: 500, lengthCm: 500 } };
+  await open(GardensWorkspace, { user: { id: 'admin' } }, withStore(active));
+  await click('Edit fixture plan');
+  const editor = document.querySelector('[data-testid="garden"]');
+  await click('Open catalogue from garden');
+  assert.equal(document.querySelector('h1').textContent, 'Catalogue');
+  await click('Back to garden');
+  assert.equal(document.querySelector('dialog'), null);
+  assert.equal(document.querySelector('[data-testid="garden"]'), editor);
+  assert.equal(document.getElementById('draft-value').textContent, '1');
+  assert.equal(globalThis.__page.mounts, 1);
 });
 
 
@@ -195,7 +206,6 @@ test('mixture editing validates total weight, preserves failed edits and saves c
   await open(CataloguePage, { userId: 'admin', onBack: () => {} });
   await change('catalogue-section', 'seed_mixtures');
   assert.match(document.body.textContent, /Cover mix/); await click('Edit');
-  assert.equal(document.getElementById('catalogue-section').disabled, true);
   await change('mixture-percentage-0', '60'); await click('Save entry');
   assert.match(document.body.textContent, /must total 100%/); assert.equal(globalThis.__page.writes.length, 0);
   await click('Add component'); await change('mixture-crop-1', 'crop'); await change('mixture-percentage-1', '40');
@@ -205,7 +215,6 @@ test('mixture editing validates total weight, preserves failed edits and saves c
   const saved = globalThis.__page.writes.at(-1);
   assert.equal(saved.table, 'seed_mixtures'); assert.equal(saved.current.version, 3);
   assert.deepEqual(saved.details.components, [{ plantTypeId: 'crop', cultivarId: 'cultivar', percentage: 60 }, { plantTypeId: 'crop', cultivarId: null, percentage: 40 }]);
-  assert.equal(document.getElementById('catalogue-section').disabled, false);
 });
 
 test('all fields edit directly and one Save submits the complete crop draft; failures preserve it', async () => {
@@ -219,15 +228,12 @@ test('all fields edit directly and one Save submits the complete crop draft; fai
   await change('details-name','Better melon');
   await change('care-monthly_feed','false');await change('depth-seed-depth_cm','3');
   await change('depth-seed-notes','Shallow sowing');
-  await click('Add companion');
-  assert.ok([...document.querySelectorAll('option')].some(option=>option.textContent==='Companion suggestion'));
-  const companion=document.querySelector('[id$="-target"]');
-  await change(companion.id,'plant:crop');
+  await change('companion_rules-companion-add','plant:crop');
   data.saveError=true;await click('Save');
   assert.match(document.body.textContent,/changed/);
   assert.equal(document.getElementById('details-name').value,'Better melon');
   assert.equal(document.getElementById('depth-seed-depth_cm').value,'3');
-  assert.equal(document.getElementById('catalogue-section').disabled,true);
+
   assert.equal(data.writes.length,0);
   data.saveError=false;await click('Save');
   assert.equal(data.writes.length,1);
@@ -235,7 +241,7 @@ test('all fields edit directly and one Save submits the complete crop draft; fai
   assert.equal(saved.changes.find(row=>row.table==='plant_guidance').details.monthly_feed,false);
   assert.equal(saved.changes.find(row=>row.table==='plant_depths').details.depth_cm,3);
   assert.equal(saved.changes.find(row=>row.table==='companion_rules').details.plant_a_id,'crop');
-  assert.equal(button('Save').disabled,true);assert.equal(document.getElementById('catalogue-section').disabled,false);
+  assert.equal(button('Save').disabled,true);
   assert.match(document.body.textContent,/All changes saved/);
 });
 
@@ -248,7 +254,7 @@ test('cultivar edits preserve inheritance and save care, depths, rotation and ca
   assert.match(document.getElementById('care-sun_requirement').textContent,/Use crop default: Full sun/);
   assert.equal(document.getElementById('depth-seed-depth_cm').placeholder,'Inherited: 2');
   await change('care-monthly_feed','false');await change('depth-seed-depth_cm','4');
-  await change('rotation-rotation-relationship','favourable_after');
+  await change('rotation_rules-favourable_after-add','plant:crop');
   assert.match(document.getElementById('crop-rotation-heading').closest('section').textContent,/Unsaved override/);
   await change('calendar-entry-window-0-start_month','5');
   await click('Save');assert.equal(data.writes.length,1);
@@ -270,11 +276,106 @@ test('readers see the whole page without editing or saving controls',async()=>{
 
 test('discard restores the entire draft and pending saves block duplicate requests and navigation',async()=>{
   const data=fixture();await open(CataloguePage,{userId:'admin',onBack:()=>{}},data);await click('View details');
-  await change('details-name','Discard me');await click('Add companion');await click('Discard changes');
+  await change('details-name','Discard me');await change('companion_rules-companion-add','plant:crop');await click('Discard changes');
   assert.equal(document.getElementById('details-name').value,'Watermelon');assert.equal(button('Save').disabled,true);
   await change('details-name','Keep me');
   let release;data.saveWait=new Promise(resolve=>{release=resolve});
   await click('Save');assert.equal(button('Save').disabled,true);assert.equal(document.getElementById('details-name').disabled,true);
   assert.equal(button('Discard changes').disabled,true);await click('Save');
   await act(async()=>release());assert.equal(data.writes.length,1);assert.equal(data.writes[0].details.name,'Keep me');
+});
+
+test('relationships use four plant lists without entry forms or notes; moving and undoing links preserves one Save',async()=>{
+  const data=fixture();
+  data.catalogue.rules=[{id:'pair',version:4,first:{kind:'plant',id:'crop'},second:{kind:'family',id:'family'},relationship:'companion',notes:'Existing explanation retained in storage'}];
+  await open(CataloguePage,{userId:'admin',onBack:()=>{}},data);await click('Watermelon');
+  const companions=document.getElementById('crop-companions-heading').closest('section');
+  const rotations=document.getElementById('crop-rotation-heading').closest('section');
+  assert.deepEqual([...companions.querySelectorAll('h5 span:first-child')].map(el=>el.textContent),['Suggestions','Caution']);
+  assert.deepEqual([...rotations.querySelectorAll('h5 span:first-child')].map(el=>el.textContent),['Favourable after','Avoid after']);
+  assert.equal(companions.querySelector('textarea'),null);assert.equal(rotations.querySelector('textarea'),null);
+  assert.doesNotMatch(companions.textContent,/Existing explanation/);
+  assert.equal(companions.querySelector('[id$="-relationship"]'),null);
+  const clickLabel=async(label)=>{const target=[...document.querySelectorAll('button')].find(el=>el.getAttribute('aria-label')===label);assert.ok(target,label);await act(async()=>target.click());};
+  await clickLabel('Remove Cucurbitaceae · Family');
+  assert.match(companions.textContent,/Undo/);await clickLabel('Restore Cucurbitaceae · Family');
+  assert.equal(button('Save').disabled,true);
+  await change('companion_rules-companion-add','cultivar:cultivar');
+  assert.equal([...document.getElementById('companion_rules-companion-add').options].some(option=>option.value==='cultivar:cultivar'),false);
+  await change('companion_rules-caution-add','cultivar:cultivar');
+  assert.equal(companions.querySelectorAll('li').length,2);
+  assert.match(document.getElementById('companion_rules-caution-heading').parentElement.textContent,/Crimson Sweet/);
+  await change('rotation_rules-favourable_after-add','plant:crop');
+  assert.match(rotations.textContent,/Unsaved override/);
+  await clickLabel('Remove Watermelon');
+  assert.match(document.getElementById('rotation_rules-avoid_after-heading').parentElement.textContent,/Inherited/);
+  await click('Save');
+  assert.equal(data.writes.length,1);
+  assert.equal(data.writes[0].changes.length,1);
+  assert.equal(data.writes[0].changes[0].details.relationship,'caution');
+  assert.equal(data.writes[0].changes[0].details.notes,'');
+  assert.equal(data.writes[0].changes[0].details.cultivar_a_id,'cultivar');
+});
+
+
+test('monthly calendar searches and filters crops, handles winter windows and shows cultivar overrides',async()=>{
+  const data=fixture();
+  data.references.plant_calendar_entries.push({ ...data.references.plant_calendar_entries[0],id:'winter',activity:'harvest',planting_method:'plant',notes:'Nov-Feb' },
+    {...data.references.plant_calendar_entries[0],id:'override',cultivar_id:'cultivar'});
+  data.references.calendar_windows.push({id:'winter-window',calendar_entry_id:'winter',start_month:11,end_month:2},
+    {id:'override-window',calendar_entry_id:'override',start_month:2,end_month:3});
+  await open(GrowingCalendar,{userId:'admin',garden:{name:'Kitchen',beds:[],dimensions:{widthCm:100,lengthCm:100},location:{countryCode:'IT',regionCode:'IT-25',displayName:'Lombardia'}}},data);
+  await change('growing-month','4');
+  assert.ok(button('Watermelon')); assert.equal(button('Watermelon · Crimson Sweet'),undefined);
+  await change('growing-month','2'); assert.ok(button('Watermelon · Crimson Sweet'));
+  assert.match(document.body.textContent,/Variety override/);
+  await change('growing-activity','harvest'); assert.match(document.body.textContent,/Nov–Feb/);
+  await change('growing-search','unknown'); assert.match(document.body.textContent,/No matching activities/);
+  await change('growing-search',''); await click('Annual view'); assert.ok(document.querySelector('[role="img"]'));
+  const checkbox=document.querySelector('input[type="checkbox"]'); await act(async()=>checkbox.click());
+  assert.match(document.body.textContent,/0 crops and varieties/);
+});
+
+test('calendar load failures allow retry and missing regional coverage remains explicit',async()=>{
+  const data=fixture();data.referenceError=true;
+  await open(GrowingCalendar,{userId:'admin',location:{countryCode:'IT',regionCode:'missing',displayName:'Unknown region'}},data);
+  assert.ok(document.querySelector('[role="alert"]')); data.referenceError=false; await click('Try again');
+  assert.match(document.body.textContent,/No calendar covers this garden/);
+  assert.match(document.body.textContent,/not specific to your garden/);
+  await click('Annual view'); await click('Watermelon'); assert.ok(document.getElementById('crop-calendar-heading'));
+  assert.equal(document.getElementById('calendar-entry-window-0-start_month').tagName,'SELECT');
+});
+
+test('one app menu preserves calendar filters and catalogue has no repeated calendar destination',async()=>{
+  await open(GardensWorkspace,{user:{id:'admin'}},withStore({id:'garden',name:'Kitchen',ownerId:'admin',dimensions:{widthCm:500,lengthCm:500},beds:[]}));
+  await click('Open catalogue from garden');
+  assert.equal(button('Calendar'),undefined); assert.equal(button('Growing calendar'),undefined);
+  assert.equal(document.querySelector('[aria-label="App navigation"]'),null);
+  await click('Growing calendar'); await change('growing-month','5'); await change('growing-search','melon');
+  await click('Catalogue'); await click('Growing calendar');
+  assert.equal(document.getElementById('growing-month').value,'5'); assert.equal(document.getElementById('growing-search').value,'melon');
+  const fields=[...document.querySelectorAll('input[id],select[id]')];
+  assert.equal(new Set(fields.map(field=>field.id)).size,fields.length);
+  assert.equal(document.getElementById('growing-month').closest('[hidden]'),null);
+});
+
+test('calendar header Back protects dirty crop details and returns to the preserved editor',async()=>{
+  const data=withStore({id:'garden',name:'Kitchen',ownerId:'admin',dimensions:{widthCm:500,lengthCm:500},beds:[]});
+  await open(GardensWorkspace,{user:{id:'admin'}},data);
+  await click('Edit fixture plan'); await click('Open catalogue from garden'); await click('Growing calendar');
+  await click('Annual view'); await click('Watermelon'); await change('details-name','Keep calendar edit');
+  await click('Back to garden'); assert.ok(button('Stay')); await click('Stay');
+  assert.equal(document.getElementById('details-name').value,'Keep calendar edit');
+  await click('Back to garden'); await click('Discard and leave');
+  assert.equal(document.querySelector('[data-testid="garden"]').closest('[hidden]'),null);
+  assert.equal(document.getElementById('draft-value').textContent,'1'); assert.equal(data.mounts,1);
+});
+
+test('family form Back uses the same Save, Discard and Stay protection',async()=>{
+  await open(CataloguePage,{userId:'admin',onBack:()=>{}}); await change('catalogue-section','families'); await click('Edit');
+  await change('catalogue-entry-name','Changed family'); await click('Back to catalogue'); await click('Stay');
+  assert.equal(document.getElementById('catalogue-entry-name').value,'Changed family');
+  await click('Back to catalogue'); await click('Save and leave');
+  assert.equal(globalThis.__page.writes.at(-1).details.name,'Changed family');
+  assert.equal(document.querySelector('form'),null);
 });

@@ -1,3 +1,5 @@
+import { MonthField } from './MonthField';
+import { useFormLeave, useGuardedBack } from '../../shared/navigation/WorkspaceNavigation';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Button } from '../../shared/ui/Button';
@@ -27,6 +29,9 @@ export function ReferenceForm({ table, data, current, initial, fixedValues = {},
   const [windows, setWindows] = useState(() => data.calendar_windows.filter((row) => row.calendar_entry_id === (current ?? initial)?.id).map((row) => ({ start_month: Number(row.start_month), end_month: Number(row.end_month) })));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  const guardedBack = useGuardedBack(onCancel);
+  const [originalFields] = useState(() => JSON.stringify([values,windows]));
+  const formRef = useFormLeave(JSON.stringify([values,windows]) !== originalFields, pending, submit, onCancel);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
@@ -45,14 +50,14 @@ export function ReferenceForm({ table, data, current, initial, fixedValues = {},
           : field.type === 'number' ? Number(value) : field.type === 'boolean' ? value === 'true' : value;
       }
       await saveReference(table, payload, current, windows);
-      onSaved();
+      onSaved(); return true;
     } catch (e) { setError(catalogueError(e).message); }
     finally { setPending(false); }
   }
   function change(field: Field, value: string) {
     setValues((previous) => ({ ...previous, [field.key]: value, ...(field.key === 'plant_type_id' && 'cultivar_id' in previous ? { cultivar_id: '' } : {}) }));
   }
-  return <form className="space-y-3" onSubmit={submit}>
+  return <form ref={formRef} className="space-y-3" onSubmit={submit}>
     <h3 className="font-semibold">{text(spec.label)}</h3>
     <p className="text-sm">{t('catalogue.inheritance')}</p>
     {spec.fields.filter((field) => !(field.key in fixedValues)).map((field) => {
@@ -66,8 +71,8 @@ export function ReferenceForm({ table, data, current, initial, fixedValues = {},
       return <TextField key={field.key} {...props} maxLength={field.key === 'name' ? 100 : 2000} onChange={(e) => change(field, e.target.value)} />;
     })}
     {table === 'plant_calendar_entries' && <fieldset className="space-y-2"><legend>{t('catalogue.monthWindows')}</legend>
-      {windows.map((window, index) => <div key={index} className="flex items-end gap-2">
-        {(['start_month', 'end_month'] as const).map((key) => <NumberField unit="" key={key} id={`window-${index}-${key}`} label={t(key === 'start_month' ? 'catalogue.startMonth' : 'catalogue.endMonth')} min={1} max={12} step={1} required disabled={pending} value={String(window[key])} onChange={(e) => setWindows(windows.map((item, i) => i === index ? { ...item, [key]: Number(e.target.value) } : item))} />)}
+      {windows.map((window, index) => <div key={index} className="grid grid-cols-2 items-end gap-2">
+        {(['start_month', 'end_month'] as const).map((key) => <MonthField key={key} id={`window-${index}-${key}`} label={t(key === 'start_month' ? 'catalogue.startMonth' : 'catalogue.endMonth')} required disabled={pending} value={String(window[key])} onChange={(e) => setWindows(windows.map((item, i) => i === index ? { ...item, [key]: Number(e.target.value) } : item))} />)}
         <Button type="button" variant="secondary" disabled={pending} onClick={() => setWindows(windows.filter((_, i) => i !== index))}>{t('catalogue.removeWindow')}</Button>
       </div>)}
       <Button type="button" variant="secondary" disabled={pending || windows.length >= 24} onClick={() => setWindows([...windows, { start_month: 1, end_month: 1 }])}>{t('catalogue.addWindow')}</Button>
@@ -75,6 +80,6 @@ export function ReferenceForm({ table, data, current, initial, fixedValues = {},
     </fieldset>}
     <p role="alert">{error}</p>
     <Button type="submit" disabled={pending}>{t('catalogue.save')}</Button>
-    <Button type="button" variant="secondary" disabled={pending} onClick={onCancel}>{cancelLabel ?? t('catalogue.cancel')}</Button>
+    <Button type="button" variant="secondary" disabled={pending} onClick={guardedBack}>{cancelLabel ?? t('catalogue.cancel')}</Button>
   </form>;
 }

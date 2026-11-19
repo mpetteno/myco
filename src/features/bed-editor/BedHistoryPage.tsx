@@ -1,3 +1,4 @@
+import { WorkspaceNav } from '../../shared/navigation/WorkspaceNavigation';
 import { AreaPlanCanvas } from '../area-editor/AreaPlanCanvas';
 import { ThemeToggle } from '../appearance/ThemeToggle';
 import { useEffect, useState } from 'react';
@@ -18,7 +19,7 @@ export function BedHistoryPage({ bed, history, onBack, onReload }: { bed: Bed; h
   return <EditorScreen header={<header className="flex min-h-14 shrink-0 items-center gap-3 border-b border-stone-200 bg-white px-3 dark:border-stone-800 dark:bg-stone-900">
     <button type="button" disabled={history.saving} onClick={onBack} className="min-h-11 cursor-pointer px-2 text-sm">← Back to bed</button>
     <h1 className="min-w-0 flex-1 truncate font-semibold">{shown?.name ?? bed.name} · History</h1>
-    <ThemeToggle />
+    <ThemeToggle /><WorkspaceNav />
   </header>} toolbar={<footer className="grid shrink-0 grid-cols-3 gap-2 border-t border-stone-200 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] dark:border-stone-800 dark:bg-stone-900">
     <Button variant="secondary" disabled={history.saving} aria-pressed={!!shown?.areaPlan || !mulch} onClick={() => setMulch(false)}>{shown?.areaPlan ? 'Areas' : 'Planting'}</Button>
     {!shown?.areaPlan && <Button variant="secondary" disabled={history.saving} aria-pressed={mulch} onClick={() => setMulch(true)}>Mulch</Button>}

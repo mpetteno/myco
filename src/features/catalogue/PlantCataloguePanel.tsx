@@ -1,3 +1,4 @@
+import { useDetailScroll } from '../../shared/hooks/useDetailScroll';
 import { CropGuidancePanel } from './CropGuidancePanel';
 import { useEffect, useState } from 'react';
 import { Button } from '../../shared/ui/Button';
@@ -20,6 +21,7 @@ export function PlantCataloguePanel({ userId, section, onEditingChange }: { user
   const [guidance, setGuidance] = useState<PlantType>();
   const [guidanceEditing, setGuidanceEditing] = useState(false);
   const [message, setMessage] = useState('');
+  const detailScroll = useDetailScroll(!guidance && !loading);
   useEffect(() => {
     onEditingChange?.(!!editing || guidanceEditing);
     return () => onEditingChange?.(false);
@@ -38,7 +40,7 @@ export function PlantCataloguePanel({ userId, section, onEditingChange }: { user
     <Button onClick={() => setAttempt((value) => value + 1)}>Try again</Button>
   </div>;
 
-  if (guidance) return <CropGuidancePanel userId={userId} cropId={guidance.id} name={guidance.name} onEditingChange={setGuidanceEditing} onBack={() => { setGuidance(undefined); setEditing(null); setAttempt((value) => value + 1); }} />;
+  if (guidance) return <CropGuidancePanel userId={userId} cropId={guidance.id} name={guidance.name} onEditingChange={setGuidanceEditing} onBack={() => { detailScroll.restore(); setGuidance(undefined); setEditing(null); setAttempt((value) => value + 1); }} />;
 
   function saved(key: 'families' | 'plants' | 'rules', entry: CatalogueSelection) {
     setData((current) => {
@@ -67,7 +69,7 @@ export function PlantCataloguePanel({ userId, section, onEditingChange }: { user
     {data.isAdmin && <Button disabled={cannotAdd} onClick={() => { setEditing({}); setMessage(''); }}>Add {section === 'families' ? 'family' : section === 'plants' ? 'crop' : 'companion rule'}</Button>}
     {data.isAdmin && cannotAdd && <p className="text-sm text-stone-600 dark:text-stone-400">Add a plant family first.</p>}
     <p role="status" className="text-sm text-green-800 empty:hidden dark:text-green-400">{message}</p>
-    <CatalogueEntries onGuidance={setGuidance} data={data} section={section} search={search} onEdit={(current) => { setEditing({ current }); setMessage(''); }} />
+    <CatalogueEntries onGuidance={(crop) => { detailScroll.remember(); setGuidance(crop); }} data={data} section={section} search={search} onEdit={(current) => { setEditing({ current }); setMessage(''); }} />
     <Button variant="secondary" onClick={() => setAttempt((value) => value + 1)}>Refresh catalogue</Button>
   </div>;
 }

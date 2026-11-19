@@ -1,3 +1,4 @@
+import { useFormLeave, useGuardedBack } from '../../shared/navigation/WorkspaceNavigation';
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Button } from '../../shared/ui/Button';
@@ -47,14 +48,17 @@ function SeedMixtureForm({ catalogue, current, onCancel, onSave }: { catalogue: 
   const [components, setComponents] = useState<SeedMixtureComponent[]>(() => current ? structuredClone(current.components) : [{ plantTypeId: catalogue.plants[0]?.id ?? '', cultivarId: null, percentage: 100 }]);
   const [pending, setPending] = useState(false), [error, setError] = useState('');
   function update(index: number, values: Partial<SeedMixtureComponent>) { setComponents((items) => items.map((item, i) => i === index ? { ...item, ...values } : item)); }
-  async function submit(event: FormEvent) {
+  const guardedBack = useGuardedBack(onCancel);
+  const [originalFields] = useState(() => JSON.stringify([name,notes,components]));
+  const formRef = useFormLeave(JSON.stringify([name,notes,components]) !== originalFields, pending, submit, onCancel);
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (pending) return;
     const details = { name, notes, components }, problem = validateSeedMixture(details);
     if (problem) { setError(problem); return; }
     setPending(true); setError('');
-    try { await onSave(details); } catch (failure) { setError(catalogueError(failure).message); } finally { setPending(false); }
+    try { await onSave(details); return true; } catch (failure) { setError(catalogueError(failure).message); } finally { setPending(false); }
   }
-  return <form className="space-y-4" onSubmit={submit}>
+  return <form ref={formRef} className="space-y-4" onSubmit={submit}>
     <h3 className="font-semibold">{current ? 'Edit seed mixture' : 'Add seed mixture'}</h3>
     <TextField id="mixture-name" label="Name" required maxLength={100} value={name} disabled={pending} onChange={(event) => setName(event.target.value)} />
     <TextField id="mixture-notes" label="Notes (optional)" maxLength={2000} value={notes} disabled={pending} onChange={(event) => setNotes(event.target.value)} />
@@ -74,6 +78,6 @@ function SeedMixtureForm({ catalogue, current, onCancel, onSave }: { catalogue: 
     </fieldset>
     <p role="alert" className="text-sm text-red-700 empty:hidden dark:text-red-400">{error}</p>
     <Button type="submit" disabled={pending}>Save entry</Button>
-    <Button type="button" variant="secondary" disabled={pending} onClick={onCancel}>Back to catalogue</Button>
+    <Button type="button" variant="secondary" disabled={pending} onClick={guardedBack}>Back to catalogue</Button>
   </form>;
 }

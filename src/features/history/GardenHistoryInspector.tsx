@@ -19,15 +19,15 @@ export function GardenHistoryInspector({ history, onReload }: { history: ReturnT
     <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain p-4">
       {history.activityForm ? <ActivityForm beds={history.getCurrent().beds} bedId={history.bedId}
         onSave={history.commitActivity} onReload={onReload} onCancel={() => history.setActivityForm(false)} /> : history.recording && history.current ? <GardenEventForm latestDate={history.events.at(-1)?.date} onSave={history.save} onReload={onReload} onCancel={() => history.setRecording(false)} /> : <>
+        <HistoryCalendar date={history.date} events={history.events} disabled={history.loading || history.saving} onDate={(date) => void history.selectDate(date)} />
+        <HistoryEventList events={history.events} history={history}/>
         <Button variant="secondary" disabled={history.loading || history.saving} onClick={() => void history.startHistoryEdit()}>
           {history.bedId ? 'Add past bed edit' : 'Add past garden edit'}
         </Button>
         {history.selected && history.selected.status !== 'planned' && <Button variant="secondary" disabled={history.loading || history.saving} onClick={() => void history.startHistoryEdit(true)}>Edit history record</Button>}
         {history.selected && <Button variant="danger" disabled={history.loading || history.saving} onClick={() => history.setDeleting({ event: history.selected!, requestId: crypto.randomUUID() })}>Delete history entry</Button>}
         <ActivityActions history={history} />
-        <HistoryCalendar date={history.date} events={history.events} disabled={history.loading || history.saving} onDate={(date) => void history.selectDate(date)} />
         {history.current && !history.bedId && <Button disabled={history.loading || history.saving} onClick={() => history.setRecording(true)}>{t('record.garden')}</Button>}
-        <HistoryEventList events={history.events} history={history}/>
         {!history.loading && !history.events.length && <p className="text-sm">Your garden plan saves automatically. Record completed work after implementing it, or add a past edit.</p>}
         <Button variant="secondary" disabled={history.loading || history.saving} onClick={() => void history.refresh()}>Refresh history</Button>
       </>}

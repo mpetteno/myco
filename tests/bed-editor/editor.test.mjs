@@ -19,7 +19,7 @@ let root;
 afterEach(async () => { if (root) await act(async () => root.unmount()); root = null; });
 after(() => { dom.window.close(); cleanupEditor(); });
 const button = (label) => [...document.querySelectorAll('button')].find((item) => item.textContent.trim() === label || item.getAttribute('aria-label') === label);
-const click = async (label) => { const item = button(label); assert.ok(item, `Missing button: ${label}`); assert.equal(item.disabled, false, `${label} is disabled`); await act(async () => item.click()); };
+const click = async (label) => { if (label === 'Summary' && !button(label) && button('More')) await act(async()=>button('More').click()); const item = button(label); assert.ok(item, `Missing button: ${label}`); assert.equal(item.disabled, false, `${label} is disabled`); await act(async () => item.click()); };
 async function type(id, value) {
   const input = document.getElementById(id); assert.ok(input);
   await act(async () => {
@@ -31,14 +31,14 @@ async function choose(id, value) {
   const input = document.getElementById(id); assert.ok(input);
   await act(async () => { input.value = value; input.dispatchEvent(new window.Event('change', { bubbles: true })); });
 }
-async function openBed(currentBed = bed) {
+async function openBed(currentBed = bed, options = {}) {
   globalThis.__editorFixture = { saves: [], save: async () => {}, seedMixtures: [{ id: 'default-mix', name: 'Demo mixture', notes: 'Fixture', version: 1, components: [{ plantTypeId: 'type-a', cultivarId: null, percentage: 100 }] }], mulchCatalogue: { isAdmin: false, types: [straw, chips] }, catalogue: { isAdmin: false,
     families: [{ id: 'family-a', name: 'Family A', notes: '', version: 1, plantSpacingCm: 30, rowSpacingCm: 40 }],
-    plants: [{ id: 'type-a', familyId: 'family-a', name: 'Type A', notes: '', version: 1, plantSpacingCm: null, rowSpacingCm: null }], rules: [] } };
+    plants: [{ id: 'type-a', familyId: 'family-a', name: 'Type A', notes: '', version: 1, plantSpacingCm: null, rowSpacingCm: null }], rules: [] }, ...options };
   root = createRoot(document.getElementById('root'));
   await act(async () => root.render(createElement(GardenPage, {
     user: { id: 'owner-a' }, garden: { id: 'garden-a', ownerId: 'owner-a', name: 'Garden',
-      dimensions: { widthCm: 500, lengthCm: 500 }, beds: [currentBed], version: 1, updatedAt: '2026-01-01' },
+      dimensions: { widthCm: 500, lengthCm: 500 }, beds: [currentBed], version: 1, updatedAt: '2026-01-01', location: options.location },
     onSaved: () => {}, onChooseGardens: () => {}, pickerOpen: false, onReload: async () => {}, onDiscardChanges: () => {},
   })));
   await click('Select fixture bed'); await click('Edit bed');
@@ -50,11 +50,11 @@ test('Edit bed opens a dedicated non-modal screen and its controls keep the draw
   assert.equal(document.querySelector('dialog'), null);
   assert.equal(document.querySelector('h1').textContent, bed.name);
   assert.equal(document.activeElement, document.querySelector('h1'));
-  await click('Bed');
+  await click('Settings');
   assert.ok(document.getElementById('bed-name'));
   assert.ok(document.querySelector('[data-testid="bed-canvas"]'));
-  await click('Recap');
-  assert.ok(document.querySelector('aside[aria-label="Bed recap"]'));
+  await click('Summary');
+  assert.ok(document.querySelector('aside[aria-label="Bed summary"]'));
   assert.equal(document.querySelector('input[type="checkbox"]'),null);
   assert.ok(document.querySelector('[data-testid="bed-canvas"]'));
   await click('Back to garden');
@@ -65,7 +65,7 @@ test('valid bed edits autosave by default, while incomplete fields protect navig
   await openBed(); await click('Add area');
   assert.equal(button('Apply plan'), undefined);
   assert.equal(globalThis.__editorFixture.saves.length, 1);
-  assert.match(document.body.textContent, /All changes saved/);
+  assert.match(document.body.textContent, /All changes saved|Saved/);
   await type('planting-plant-spacing', '');
   const warning = new window.Event('beforeunload', { cancelable: true }); window.dispatchEvent(warning);
   assert.equal(warning.defaultPrevented, true);
@@ -114,10 +114,10 @@ test('garden Delete and Backspace shortcuts stay inactive while editing a bed', 
 });
 
 test('bed name changes save on the page and dimensions cannot crop draft areas', async () => {
-  await openBed(); await click('Bed'); await type('bed-name', 'Renamed bed'); await click('Save bed');
+  await openBed(); await click('Settings'); await type('bed-name', 'Renamed bed'); await click('Save bed');
   assert.equal(document.querySelector('h1').textContent, 'Renamed bed');
   assert.equal(globalThis.__editorFixture.saves[0].beds[0].name, 'Renamed bed');
-  await click('Add area'); await click('Bed'); await type('bed-width', '95'); await click('Save bed');
+  await click('Add area'); await click('Settings'); await type('bed-width', '95'); await click('Save bed');
   assert.match(document.body.textContent, /crop a draft area/);
   assert.equal(globalThis.__editorFixture.saves.length, 2);
 });
@@ -189,7 +189,7 @@ test('area resize commits balance borders, compress rows, reject cropping and ke
   const id = globalThis.__editorCanvas.plan.areas[0].id;
   await act(async () => globalThis.__editorCanvas.onBounds(id, { xCm: 0, yCm: 0, widthCm: 80, lengthCm: 200 }));
   assert.match(document.body.textContent, /Row gaps reach 25 cm/);
-  assert.match(document.body.textContent, /All changes saved/);
+  assert.match(document.body.textContent, /All changes saved|Saved/);
   await act(async () => globalThis.__editorCanvas.onBounds(id, { xCm: 0, yCm: 0, widthCm: 35, lengthCm: 200 }));
   assert.equal(globalThis.__editorCanvas.plan.areas[0].widthCm, 80);
  
@@ -268,7 +268,7 @@ test('automatic crop labels and attached mulch survive reference refresh and reo
 });
 
 test('bed dimensions cannot crop a mulched area, and removal clears the area and its layers together', async () => {
-  await openBed({ ...bed, mulchPlan: mulchPlan() }); await click('Bed');
+  await openBed({ ...bed, mulchPlan: mulchPlan() }); await click('Settings');
   await type('bed-width', '95'); await click('Save bed');
   assert.match(document.body.textContent, /crop a draft area/);
   assert.equal(globalThis.__editorFixture.saves.length, 0);
@@ -282,11 +282,11 @@ test('changing planting method keeps bounds, purpose and mulch while clearing th
   const saved = globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0];
   assert.equal(saved.kind, 'broadcast'); assert.equal(saved.purpose, 'green_manure'); assert.equal(saved.mulch.length, 1);
   assert.equal(saved.widthCm, bed.widthCm);
-  await click('Clear area plan'); assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas.length, 0);
+  await click('Clear area plan'); await click('Clear all areas'); assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas.length, 0);
 });
 
 test('focused area settings support planting and mulch with a shared draft, zoom and autosave', async () => {
-  await openBed(); await click('Add area'); await click('Open area editor');
+  await openBed(); await click('Add area'); await click('Focus area');
   assert.ok(button('← Back to bed')); assert.equal(globalThis.__editorCanvas.focus.kind, 'planting');
   assert.equal(globalThis.__editorCanvas.focusZoom, 0.8);
   await click('Zoom out'); assert.ok(globalThis.__editorCanvas.focusZoom < 0.8);
@@ -300,10 +300,10 @@ test('focused area settings support planting and mulch with a shared draft, zoom
 });
 
 test('broadcast green manure calculates seed quantities, requires density and keeps mixture snapshots', async () => {
-  await openBed(); await click('Add area'); await click('Open area editor');
+  await openBed(); await click('Add area'); await click('Focus area');
   const fixture = globalThis.__editorFixture;
   fixture.seedMixtures = [{ id: 'mix', name: 'Cover mix', notes: '', version: 1, components: [{ plantTypeId: 'type-a', cultivarId: null, percentage: 100 }] }];
-  await click('← Back to bed'); await click('Refresh area references'); await click('Open area editor');
+  await click('← Back to bed'); await click('Refresh area references'); await click('Focus area');
   await choose('area-purpose', 'green_manure');
   const writes = fixture.saves.length;
   assert.equal(document.getElementById('area-kind'), null);
@@ -316,7 +316,7 @@ test('broadcast green manure calculates seed quantities, requires density and ke
   const saved = fixture.saves.at(-1).beds[0].areaPlan.areas[0];
   assert.equal(saved.purpose, 'green_manure'); assert.equal(saved.sowing.mixture.name, 'Cover mix');
   assert.equal(saved.sowing.mixture.components[0].plant.name, 'Type A'); assert.equal(saved.mulch.length, 1);
-  fixture.seedMixtures[0].name = 'Changed catalogue name'; await click('← Back to bed'); await click('Refresh area references'); await click('Open area editor');
+  fixture.seedMixtures[0].name = 'Changed catalogue name'; await click('← Back to bed'); await click('Refresh area references'); await click('Focus area');
   assert.equal(globalThis.__editorCanvas.plan.areas[0].sowing.mixture.name, 'Cover mix');
   await type('broadcast-density', ''); await click('← Back to bed'); await click('Back to garden');
   assert.match(document.body.textContent, /could not be saved/); await click('Discard and return');
@@ -333,7 +333,7 @@ test('broadcast crops use grams per square metre without a unit selector and qua
   const area = globalThis.__editorCanvas.plan.areas[0];
   await act(async () => globalThis.__editorCanvas.onBounds(area.id, { ...area, widthCm: 50 }));
   assert.equal(document.getElementById('broadcast-total').value, '50');
-  await click('Recap'); assert.match(document.body.textContent, /Broadcast sowing/); assert.match(document.body.textContent, /50 g/);
+  await click('Summary'); assert.match(document.body.textContent, /Broadcast sowing/); assert.match(document.body.textContent, /50 g/);
 });
 
 test('bed history protects invalid edits, filters other beds activities and preserves old plan geometry',async()=>{
@@ -369,7 +369,7 @@ test('expanding a focused area autosaves the changed neighbour in the same garde
   await openBed();await click('Add area');await click('Split selected area');
   const fixture=globalThis.__editorFixture;
   const [first,second]=globalThis.__editorCanvas.plan.areas;
-  await choose('planting-selected-area',first.id);await click('Open area editor');
+  await choose('planting-selected-area',first.id);await click('Focus area');
   const writes=fixture.saves.length,version=fixture.currentGarden.version;
   await act(async()=>globalThis.__editorCanvas.onBounds(first.id,{...first,lengthCm:120}));
   assert.equal(fixture.saves.length,writes+1);
@@ -391,7 +391,7 @@ test('opening an older plan and discarding invalid fields does not autosave a fo
   await click('History');await click('Discard and view history');
   await click('← Back to bed');
   assert.equal(fixture.saves.length,0);
-  assert.match(document.body.textContent,/All changes saved/);
+  assert.match(document.body.textContent,/All changes saved|Saved/);
   await click('Areas');await type('planting-row-count','3');
   assert.equal(fixture.saves.length,1);
   assert.equal(fixture.saves[0].beds[0].areaPlan.version,5);
@@ -429,7 +429,7 @@ test('area fields reset independently, omit orientation sizes and automatic-coun
   await click('Reset number of rows');
   assert.equal(document.getElementById('planting-row-count').value,'2');
   assert.equal(document.getElementById('planting-plant-spacing').value,'10');
-  await click('Open area editor');await click('Reset plant spacing');
+  await click('Focus area');await click('Reset plant spacing');
   assert.equal(document.getElementById('planting-plant-spacing').value,'30');
   assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0].rowCount,2);
 });
@@ -467,29 +467,29 @@ test('Edit garden groups sharing, rename and size while More no longer contains 
   for(const label of ['Share garden','Rename garden','Garden size'])assert.ok(![...more.querySelectorAll('button')].some(item=>item.textContent===label));
   assert.ok(!more.textContent.includes('Plant catalogue'));assert.ok(!more.textContent.includes('Mulch catalogue'));
   assert.ok(more.textContent.includes('Your gardens'));assert.ok(more.textContent.includes('Copy bed'));
-  await click('Close');await click('Edit garden');
+  await click('Close');await click('More');await click('Garden settings');
   const edit=document.querySelector('dialog');
   for(const label of ['Share garden','Rename garden','Garden size'])assert.ok([...edit.querySelectorAll('button')].some(item=>item.textContent===label));
   await click('Rename garden');await type('garden-name','Woodland garden');await click('Save name');
   assert.equal(globalThis.__editorFixture.saves.at(-1).name,'Woodland garden');
-  await click('Edit garden');await click('Garden size');await type('garden-width','600');await click('Update garden');
+  await click('More');await click('Garden settings');await click('Garden size');await type('garden-width','600');await click('Update garden');
   assert.equal(globalThis.__editorFixture.saves.at(-1).dimensions.widthCm,600);
 });
 
 test('Recap groups plant totals by type, shows area dimensions and updates without making edits',async()=>{
-  await openBed();assert.equal(button('Plan'),undefined);await click('Recap');
-  assert.match(document.querySelector('aside[aria-label="Bed recap"]').textContent,/No areas yet/);
+  await openBed();assert.equal(button('Plan'),undefined);await click('Summary');
+  assert.match(document.querySelector('aside[aria-label="Bed summary"]').textContent,/No areas yet/);
   await click('Add area');await click('Split selected area');
-  await click('Recap');const writes=globalThis.__editorFixture.saves.length;
+  await click('Summary');const writes=globalThis.__editorFixture.saves.length;
   const plants=document.querySelector('section[aria-label="Plants by type"]');
   assert.equal(plants.querySelectorAll('li').length,1);
   assert.match(plants.textContent,/Type A.*12 plants · 2 areas/);
   assert.match(document.querySelector('section[aria-label="Planting area recap"]').textContent,/100 × 100 cm/);
-  const details=document.querySelector('aside[aria-label="Bed recap"]');
+  const details=document.querySelector('aside[aria-label="Bed summary"]');
   assert.match(details.textContent,/Bed surface2 m²/);assert.match(details.textContent,/Outside areas0 m²/);
-  assert.equal(details.querySelector('input'),null,'Recap contains no editing controls');
+  assert.equal(details.querySelectorAll('input:not([type="date"])').length,0,'Recap only adds the advice date control');
   await click('Areas');assert.equal(document.querySelector('section[aria-label="Area settings"] input[type="checkbox"]'), null);
-  await type('planting-plant-spacing','10');await click('Recap');
+  await type('planting-plant-spacing','10');await click('Summary');
   assert.match(document.querySelector('section[aria-label="Plants by type"]').textContent,/22 plants · 2 areas/);
   assert.equal(globalThis.__editorFixture.saves.length,writes+1,'switching menus does not save garden changes');
 });
@@ -502,8 +502,8 @@ test('garden Recap totals plants across copied beds and shows their full footpri
   await act(async()=>window.dispatchEvent(new window.KeyboardEvent('keydown',{key:'c',ctrlKey:true,bubbles:true,cancelable:true})));
   await act(async()=>window.dispatchEvent(new window.KeyboardEvent('keydown',{key:'v',ctrlKey:true,bubbles:true,cancelable:true})));
   const fixture=globalThis.__editorFixture,writes=fixture.saves.length;
-  await click('Recap');const recap=document.querySelector('dialog');
-  assert.match(recap.textContent,/Garden recap/);assert.match(recap.textContent,/Garden surface25 m²/);assert.match(recap.textContent,/Beds2/);
+  await click('Summary');const recap=document.querySelector('dialog');
+  assert.match(recap.textContent,/Garden summary/);assert.match(recap.textContent,/Garden surface25 m²/);assert.match(recap.textContent,/Beds2/);
   assert.match(recap.textContent,/Total plants24/);assert.match(recap.textContent,/Area occupied by beds4 m²/);
   const totals=recap.querySelector('section[aria-label="Garden plants by type"]');
   assert.match(totals.textContent,/Type A12 plants/);assert.match(totals.textContent,/Type B12 plants/);
@@ -512,7 +512,7 @@ test('garden Recap totals plants across copied beds and shows their full footpri
 });
 
 test('garden Recap shows zero plants while counting beds without planting plans',async()=>{
-  await openBed();await click('Back to garden');await click('Recap');
+  await openBed();await click('Back to garden');await click('Summary');
   assert.match(document.querySelector('dialog').textContent,/No plant rows or broadcast sowing in these beds yet/);
   assert.match(document.querySelector('dialog').textContent,/Area occupied by beds2 m²/);
   assert.equal(globalThis.__editorFixture.saves.length,0);
@@ -537,7 +537,7 @@ test('backdated bed edits include planting and mulch while protecting other beds
   assert.equal(saved.xCm,20);assert.equal(saved.areaPlan.areas.length,1);assert.equal(saved.areaPlan.areas[0].mulch.length,1);
   assert.equal(recorded.document.beds.find(item=>item.id===other.id).xCm,150);
   assert.equal(fixture.saves.length,0);
-  await click('Plan');await click('← Back to bed');assert.equal(globalThis.__editorCanvas.plan.areas.length,0);
+  await click('Current plan');await click('← Back to bed');assert.equal(globalThis.__editorCanvas.plan.areas.length,0);
 });
 
 test('historical metadata corrections preserve older planting geometry until planting controls are edited',async()=>{
@@ -546,7 +546,7 @@ test('historical metadata corrections preserve older planting geometry until pla
   fixture.historyEvents=[{id:'old-bed',gardenId:'garden-a',kind:'planting',bedId:bed.id,status:'completed',eventVersion:1,order:1,date:'2025-01-01',title:'Older bed',notes:'',document:{name:'Garden',dimensions:{widthCm:500,lengthCm:500},beds:[old]}}];
   await click('History');await click('View completed event: Older bed');await click('Edit history record');
   assert.equal(globalThis.__editorCanvas.plan.version,5);
-  await click('Bed');await type('bed-name','Earlier name');await click('Save bed');
+  await click('Settings');await type('bed-name','Earlier name');await click('Save bed');
   await click('Save history record');await click('Save record');
   assert.deepEqual(fixture.historyEvents[0].document.beds[0].plantingPlan,old.plantingPlan);
   await click('Edit history record');await click('Areas');await type('planting-row-count','4');
@@ -682,7 +682,7 @@ test('area names follow crop, optional cultivar and seed mixture selections with
   catalogue.plants.push({ ...catalogue.plants[0], id: 'type-b', name: 'Type B' });
   catalogue.cultivars = [{ id: 'var-a', plantTypeId: 'type-a', name: 'Early A', notes: '', version: 1, plantSpacingCm: null, rowSpacingCm: null, borderDistanceCm: null, livingMulchEnabled: null }];
   fixture.seedMixtures.push({ ...fixture.seedMixtures[0], id: 'second-mix', name: 'Second mixture' });
-  await click('Refresh area references'); await click('Open area editor');
+  await click('Refresh area references'); await click('Focus area');
   assert.equal(document.getElementById('area-name'), null);
   assert.equal(document.querySelector('h1').textContent, 'Type A');
   await choose('planting-cultivar', 'var-a');
@@ -699,8 +699,8 @@ test('area names follow crop, optional cultivar and seed mixture selections with
   await click('← Back to bed'); await click('Areas');
   assert.match(document.getElementById('planting-selected-area').textContent, /Second mixture/);
   assert.ok(!document.body.textContent.includes('Old custom name'));
-  await click('Recap'); assert.match(document.body.textContent, /Second mixture/);
-  await click('Back to garden'); await click('Edit bed'); await click('Areas'); await click('Open area editor');
+  await click('Summary'); assert.match(document.body.textContent, /Second mixture/);
+  await click('Back to garden'); await click('Edit bed'); await click('Areas'); await click('Focus area');
   assert.equal(document.querySelector('h1').textContent, 'Second mixture');
 });
 
@@ -711,7 +711,7 @@ test('adjacent areas retain all their plants without a cross-area spacing contro
   await openBed({ ...bed, areaPlan: areaPlan(first, second) }); await click('Areas');
   assert.equal(document.querySelector('section[aria-label="Area settings"] input[type="checkbox"]'), null);
   assert.ok(!document.body.textContent.includes('Keep spacing between areas'));
-  await click('Recap');
+  await click('Summary');
   assert.match(document.querySelector('section[aria-label="Plants by type"]').textContent, /12 plants · 2 areas/);
   assert.ok(!document.body.textContent.includes('Spacing checks between different areas are overridden'));
   assert.equal(globalThis.__editorFixture.saves.length, 0);
@@ -719,12 +719,12 @@ test('adjacent areas retain all their plants without a cross-area spacing contro
 
 
 test('area settings contain fields and validation without explanatory paragraphs', async () => {
-  await openBed(); await click('Add area'); await click('Open area editor');
+  await openBed(); await click('Add area'); await click('Focus area');
   const controls = () => document.querySelector('aside[aria-label="Area editor controls"]');
   assert.ok(document.getElementById('area-purpose'));
   assert.ok(document.getElementById('planting-crop'));
   assert.ok(document.getElementById('planting-row-count'));
-  assert.equal(controls().querySelectorAll('p').length, 0);
+  assert.equal([...controls().querySelectorAll('p')].filter(p => !p.closest('details')).length, 0);
   for (const text of ['Measurements and resizing stay', 'Saved reference:', 'Minimum clearances:', 'Grid spacing:', 'Your chosen rows', 'Custom spacing overrides']) assert.ok(!document.body.textContent.includes(text));
   const writes = globalThis.__editorFixture.saves.length;
   await type('planting-plant-spacing', '');
@@ -737,6 +737,235 @@ test('area settings contain fields and validation without explanatory paragraphs
   assert.equal(document.getElementById('broadcast-total').value, '20');
   assert.equal(document.getElementById('broadcast-component-0').readOnly, true);
   assert.equal(document.getElementById('broadcast-component-0').value, '20');
-  assert.equal(controls().querySelectorAll('p').length, 0);
+  assert.equal([...controls().querySelectorAll('p')].filter(p => !p.closest('details')).length, 0);
   for (const text of ['Mixture proportions are by weight', 'Green manure is grown for the soil', 'No mulch on this area']) assert.ok(!controls().textContent.includes(text));
+});
+
+function suggestionOptions() {
+  const crop = (id, name) => ({ id, name, familyId: 'family-a', notes: '', version: 1, plantSpacingCm: 30, rowSpacingCm: 40, borderDistanceCm: 15 });
+  return {
+    location: { countryCode: 'IT', regionCode: 'IT-25', displayName: 'Lombardia' },
+    catalogue: { isAdmin: false, families: [{ id: 'family-a', name: 'Family A', notes: '', version: 1, plantSpacingCm: 30, rowSpacingCm: 40 }], plants: [crop('type-a', 'Type A'), crop('type-b', 'Type B')], rules: [] },
+    references: { plant_cultivars: [], plant_guidance: [], plant_depths: [], rotation_rules: [], mulch_categories: [], plant_types: [], plant_families: [], isAdmin: false,
+      calendar_profiles: [{ id: 'profile', name: 'Regional', code: 'regional', version: 1 }], calendar_coverage: [{ id: 'coverage', country_code: 'IT', region_code: 'IT-25', calendar_profile_id: 'profile' }],
+      plant_calendar_entries: ['type-a', 'type-b'].map((id) => ({ id, plant_type_id: id, cultivar_id: null, calendar_profile_id: 'profile', activity: 'direct_sowing', planting_method: 'seed', notes: '' })),
+      calendar_windows: ['type-a', 'type-b'].map((id) => ({ id, calendar_entry_id: id, start_month: 10, end_month: 2 })) },
+  };
+}
+const suggestionsPanel = () => document.querySelector('section[aria-label="Suggestions"]');
+async function useSuggested(label) {
+  const card = [...suggestionsPanel().querySelectorAll('article')].find((a) => a.querySelector('h5').textContent === label);
+  assert.ok(card, `Missing suggestion ${label}`);
+  await act(async () => card.querySelector('button').click());
+}
+
+test('automatic suggestions are read-only until chosen and apply atomically with geometry and mulch preserved', async () => {
+  const original = rows({ mulch: [{ id: 'layer', material: straw }] });
+  await openBed({ ...bed, areaPlan: areaPlan(original) }, suggestionOptions()); await click('Areas');
+  assert.ok(suggestionsPanel()); assert.match(suggestionsPanel().textContent, /Lombardia/);
+  assert.equal(globalThis.__editorFixture.saves.length, 0);
+  const reads = globalThis.__editorFixture.suggestionReads;
+  await useSuggested('Type B');
+  const saved = globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0];
+  assert.equal(saved.plant.id, 'type-b'); assert.equal(saved.id, original.id);
+  for (const key of ['xCm', 'yCm', 'widthCm', 'lengthCm']) assert.equal(saved[key], original[key]);
+  assert.deepEqual(saved.mulch, original.mulch);
+  assert.equal(globalThis.__editorFixture.saves.length, 1);
+  assert.equal(globalThis.__editorFixture.suggestionReads, reads, 'plan edits recompute locally');
+  assert.equal(globalThis.__editorFixture.eventWrites, undefined);
+  await click('Focus area');
+  assert.ok(suggestionsPanel()); assert.match(suggestionsPanel().textContent, /Your current selection · Type B/);
+});
+
+test('advice date changes update seasonal results without saving or fetching and Today restores the local date', async () => {
+  await openBed({ ...bed, areaPlan: areaPlan(rows()) }, suggestionOptions()); await click('Areas');
+  const reads = globalThis.__editorFixture.suggestionReads;
+  const dateId = suggestionsPanel().querySelector('input[type="date"]').id;
+  await type(dateId, '2027-07-01');
+  assert.match(suggestionsPanel().textContent, /Outside the recorded sowing/);
+  await type(dateId, '2027-11-01'); assert.match(suggestionsPanel().textContent, /In the regional calendar window/);
+  assert.equal(globalThis.__editorFixture.suggestionReads, reads); assert.equal(globalThis.__editorFixture.saves.length, 0);
+  await act(async () => window.dispatchEvent(new window.Event('focus')));
+  assert.equal(suggestionsPanel().querySelector('input').value, '2027-11-01', 'focus preserves explicit date');
+  assert.equal(globalThis.__editorFixture.suggestionReads, reads + 1);
+  await click('Today');
+  const today = new Date();
+  assert.equal(suggestionsPanel().querySelector('input').value, `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`);
+  assert.equal(globalThis.__editorFixture.saves.length, 0);
+});
+
+test('green-manure suggestions require an explicit density before autosave', async () => {
+  const original = rows({ mulch: [{ id: 'layer', material: straw }] });
+  await openBed({ ...bed, areaPlan: areaPlan(original) }, suggestionOptions()); await click('Areas');
+  await useSuggested('Demo mixture');
+  assert.equal(globalThis.__editorCanvas.plan.areas[0].purpose, 'green_manure');
+  assert.equal(globalThis.__editorCanvas.plan.areas[0].kind, 'broadcast');
+  assert.equal(globalThis.__editorFixture.saves.length, 0);
+  assert.match(document.body.textContent, /sowing density/);
+  await type('broadcast-density', '10');
+  assert.equal(globalThis.__editorFixture.saves.length, 1);
+  const saved = globalThis.__editorFixture.saves[0].beds[0].areaPlan.areas[0];
+  assert.equal(saved.sowing.mixture.id, 'default-mix'); assert.equal(saved.density, 10);
+  assert.deepEqual(saved.mulch, original.mulch); assert.equal(saved.id, original.id);
+});
+
+test('suggestion failures retry independently without blocking editing or claiming safe rotation', async () => {
+  await openBed({ ...bed, areaPlan: areaPlan(rows()) }, { ...suggestionOptions(),
+    referenceLoad: async () => { throw Error('Reference offline'); }, suggestionHistoryLoad: async () => { throw Error('History offline'); } });
+  await click('Areas');
+  assert.match(suggestionsPanel().textContent, /Reference guidance could not be loaded/);
+  assert.match(suggestionsPanel().textContent, /Rotation advice is unavailable/);
+  assert.ok(!suggestionsPanel().textContent.includes('Some of this ground has no recorded'));
+  await type('planting-row-count', '3'); assert.equal(globalThis.__editorFixture.saves.length, 1);
+  delete globalThis.__editorFixture.referenceLoad; delete globalThis.__editorFixture.suggestionHistoryLoad;
+  await click('Retry suggestions');
+  assert.ok(!suggestionsPanel().textContent.includes('could not be loaded'));
+  assert.match(suggestionsPanel().textContent, /Some of this ground has no recorded/);
+  assert.equal(globalThis.__editorFixture.saves.length, 1);
+});
+
+test('returning from history refreshes suggestions, including corrected and deleted observations', async () => {
+  await openBed({ ...bed, areaPlan: areaPlan(rows()) }, suggestionOptions()); await click('Areas');
+  const fixture = globalThis.__editorFixture;
+  fixture.historyEvents = [{ id: 'past', date: '2020-01-01', order: 1, title: 'Recorded crop', notes: '', status: 'completed', kind: 'layout',
+    document: { name: 'Garden', dimensions: { widthCm: 500, lengthCm: 500 }, beds: [{ ...bed, areaPlan: areaPlan(rows({ plant: { ...snapshot, name: 'Old crop' } })) }] } }];
+  await click('History'); await click('← Back to bed');
+  assert.match(suggestionsPanel().textContent, /Old crop recorded on 2020-01-01/);
+  fixture.historyEvents[0].document.beds[0].areaPlan.areas[0].plant.name = 'Corrected crop';
+  await act(async () => window.dispatchEvent(new window.Event('focus')));
+  assert.match(suggestionsPanel().textContent, /Corrected crop recorded/);
+  fixture.historyEvents = [];
+  await act(async () => window.dispatchEvent(new window.Event('focus')));
+  assert.ok(!suggestionsPanel().textContent.includes('Corrected crop recorded'));
+  assert.equal(fixture.saves.length, 0);
+});
+
+test('late suggestion responses after leaving the editor cannot replace the next garden state', async () => {
+  let finish;
+  await openBed({ ...bed, areaPlan: areaPlan(rows()) }, { ...suggestionOptions(), suggestionHistoryLoad: () => new Promise((resolve) => { finish = resolve; }) });
+  await click('Back to garden');
+  await act(async () => finish([]));
+  assert.equal(suggestionsPanel(), null); assert.equal(globalThis.__editorFixture.saves.length, 0);
+});
+
+test('automatic advice date advances at midnight while an explicit planning date stays fixed', async () => {
+  const NativeDate = globalThis.Date, nativeTimeout = globalThis.setTimeout;
+  let now = new NativeDate(2026, 10, 18, 23, 59, 59).getTime();
+  const scheduled = [];
+  globalThis.Date = class extends NativeDate {
+    constructor(...args) { super(...(args.length ? args : [now])); }
+    static now() { return now; }
+  };
+  globalThis.setTimeout = (callback, delay, ...args) => {
+    const timer = nativeTimeout(callback, delay, ...args);
+    if (delay >= 1000) scheduled.push({ callback, timer });
+    return timer;
+  };
+  try {
+    await openBed({ ...bed, areaPlan: areaPlan(rows()) }, suggestionOptions()); await click('Areas');
+    assert.equal(suggestionsPanel().querySelector('input').value, '2026-11-18');
+    now = new NativeDate(2026, 10, 19, 0, 0, 0).getTime();
+    const midnight = scheduled.at(-1); clearTimeout(midnight.timer);
+    await act(async () => midnight.callback());
+    assert.equal(suggestionsPanel().querySelector('input').value, '2026-11-19');
+    await type(suggestionsPanel().querySelector('input').id, '2027-04-01');
+    now = new NativeDate(2026, 10, 20, 0, 0, 0).getTime();
+    const nextMidnight = scheduled.at(-1); clearTimeout(nextMidnight.timer);
+    await act(async () => nextMidnight.callback());
+    assert.equal(suggestionsPanel().querySelector('input').value, '2027-04-01');
+    assert.equal(globalThis.__editorFixture.saves.length, 0);
+  } finally {
+    globalThis.Date = NativeDate; globalThis.setTimeout = nativeTimeout;
+    for (const { timer } of scheduled) clearTimeout(timer);
+  }
+});
+
+test('area deletion and confirmed clearing can restore complete planting and mulch snapshots', async () => {
+  await openBed(); await click('Add area'); await click('Add mulch layer');
+  const original = structuredClone(globalThis.__editorCanvas.plan);
+  await click('Remove selected area');
+  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas.length, 0);
+  await click('Undo');
+  assert.deepEqual(globalThis.__editorCanvas.plan, original);
+  assert.deepEqual(globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan, original);
+  const count = globalThis.__editorFixture.saves.length;
+  await click('Clear area plan');
+  assert.equal(globalThis.__editorFixture.saves.length, count, 'opening confirmation does not clear');
+  await click('Keep areas');
+  assert.deepEqual(globalThis.__editorCanvas.plan, original);
+  await click('Clear area plan'); await click('Clear all areas');
+  assert.equal(globalThis.__editorCanvas.plan.areas.length, 0);
+  await click('Undo'); assert.deepEqual(globalThis.__editorCanvas.plan, original);
+});
+
+test('undoing a newly added focused area returns to the bed rather than leaving an empty screen', async () => {
+  await openBed(); await click('Add area'); await click('Focus area');
+  assert.ok(button('← Back to bed'));
+  await click('Undo');
+  assert.ok(button('Back to garden'));
+  assert.equal(globalThis.__editorCanvas.plan.areas.length, 0);
+  assert.equal(button('Undo').disabled, true);
+});
+
+test('mobile panel toggles expose the actual expanded state and an explicit selected-area edit action', async () => {
+  await openBed({ ...bed, plantingPlan: planV5() });
+  assert.equal(button('Areas').getAttribute('aria-expanded'), 'false');
+  assert.equal(button('Areas').getAttribute('aria-pressed'), 'false');
+  await click('Edit selected area');
+  assert.equal(button('Areas').getAttribute('aria-expanded'), 'true');
+  assert.equal(button('Areas').getAttribute('aria-controls'), 'bed-inspector');
+  await click('Hide controls');
+  assert.equal(button('Areas').getAttribute('aria-expanded'), 'false');
+  assert.equal(document.activeElement, button('Areas'));
+});
+
+test('numeric geometry rejects overflow and off-grid input and saves valid positions through the usual queue', async () => {
+  await openBed(); await click('Settings');
+  await type('bed-position-xCm', '450'); await click('Update position');
+  assert.match(document.body.textContent, /extend outside the garden/);
+  assert.equal(globalThis.__editorFixture.saves.length, 0);
+  await type('bed-position-xCm', '101'); await click('Update position');
+  assert.match(document.body.textContent, /multiples of 5 cm/);
+  await type('bed-position-xCm', '100'); await click('Update position');
+  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].xCm, 100);
+  await click('Back to garden'); await click('Undo');
+  assert.equal(globalThis.__gardenCanvas.beds[0].xCm, 0);
+  await click('Select fixture bed'); await click('Edit bed'); await click('Add area');
+  await type('area-bounds-xCm', '25'); await click('Update area bounds');
+  assert.match(document.body.textContent, /extend outside the bed/);
+  assert.equal(globalThis.__editorCanvas.plan.areas[0].xCm, 0);
+  await type('area-bounds-xCm', '0'); await type('area-bounds-lengthCm', '150'); await click('Update area bounds');
+  assert.equal(globalThis.__editorFixture.saves.at(-1).beds[0].areaPlan.areas[0].lengthCm, 150);
+  await click('Undo'); assert.equal(globalThis.__editorCanvas.plan.areas[0].lengthCm, 200);
+});
+
+test('garden deletion undo preserves a complete bed and queues restoration behind a pending delete save', async () => {
+  await openBed({ ...bed, plantingPlan: planV5(), mulchPlan: mulchPlan() }); await click('Back to garden');
+  const original = structuredClone(globalThis.__gardenCanvas.beds[0]);
+  let release;
+  globalThis.__editorFixture.save = () => new Promise(resolve => { release = resolve; });
+  await act(async () => window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true })));
+  assert.equal(globalThis.__gardenCanvas.beds.length, 0);
+  await click('Undo');
+  assert.deepEqual(globalThis.__gardenCanvas.beds[0], original);
+  globalThis.__editorFixture.save = async () => {};
+  await act(async () => release());
+  assert.deepEqual(globalThis.__editorFixture.saves.at(-1).beds[0], original);
+  assert.equal(button('Undo').disabled, true, 'undo stays in the header without changing layout when exhausted');
+});
+
+
+test('selecting a garden bed replaces one toolbar action without adding a row or opening an editor', async () => {
+  await openBed(); await click('Back to garden');
+  await act(async()=>globalThis.__gardenCanvas.onSelectBed(null));
+  const footer=document.querySelector('footer'); const canvasButton=button('Select fixture bed');
+  assert.deepEqual([...footer.querySelectorAll('button')].map(item=>item.textContent),['Add bed','Beds (1)','Summary','More']);
+  const row=footer.firstElementChild;
+  await click('Select fixture bed');
+  assert.equal(document.querySelector('footer'),footer); assert.equal(footer.firstElementChild,row);
+  assert.equal(row.children.length,1); assert.equal(document.querySelector('dialog'),null);
+  assert.deepEqual([...footer.querySelectorAll('button')].map(item=>item.textContent),['Add bed','Beds (1)','Edit bed','More']);
+  assert.equal(button('Select fixture bed'),canvasButton); assert.equal(document.querySelector('[data-testid="bed-canvas"]'),null);
+  await act(async()=>globalThis.__gardenCanvas.onSelectBed(null));
+  assert.equal(footer.firstElementChild,row); assert.ok(button('Summary'));
 });

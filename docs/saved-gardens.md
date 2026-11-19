@@ -49,7 +49,7 @@ apply SQL when the frontend starts.
 
 After signing in, create a garden with a name, width and length in centimetres.
 It starts with no beds. Tap the current garden name in the header to choose an
-existing garden or create another. **Edit garden → Rename garden** changes its name.
+existing garden or create another. **Garden settings → Rename garden** changes its name.
 Duplicate names are allowed; gardens have independent IDs and layouts.
 
 Names, dimensions, bed additions, deletions and finished move/resize gestures

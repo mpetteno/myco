@@ -9,8 +9,9 @@ const directory = mkdtempSync(join(tmpdir(), 'myco-auth-tests-'));
 const stub = join(directory, 'client.mjs');
 writeFileSync(stub, 'export const getSupabaseClient = () => globalThis.__mycoAuthClient;');
 
-export async function loadModule(entry, name) {
+export async function loadModule(entry, name, { sharedReact = false } = {}) {
   const result = await build({ configFile: false, envFile: false, logLevel: 'silent',
+    plugins: sharedReact ? [{ name: 'shared-test-react', enforce: 'pre', resolveId(id) { if (id === 'react' || id === 'react/jsx-runtime') return { id: import.meta.resolve(id), external: true }; } }] : [],
     resolve: { alias: { '../../shared/supabase/client': stub } },
     build: { write: false, minify: false, lib: { entry, formats: ['es'] } },
   });

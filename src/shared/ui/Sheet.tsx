@@ -7,11 +7,13 @@ type SheetProps = { title: string; onClose: () => void; children: ReactNode; dis
 
 export function Sheet({ title, onClose, children, dismissible = true }: SheetProps) {
   const ref = useRef<HTMLDialogElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
   const titleId = useId();
   const viewport = useVisualViewport();
   useLayoutEffect(() => {
     const dialog = ref.current!;
     dialog.showModal();
+    heading.current?.focus();
     return () => dialog.close();
   }, []);
 
@@ -28,7 +30,7 @@ export function Sheet({ title, onClose, children, dismissible = true }: SheetPro
         onClick={(event) => { if (dismissible && event.target === event.currentTarget) onClose(); }}>
         <section className="flex max-h-[95%] w-full min-w-0 flex-col overflow-hidden rounded-t-2xl border border-stone-200 bg-white shadow-xl sm:max-w-md sm:rounded-2xl dark:border-stone-800 dark:bg-stone-900">
           <header className="flex shrink-0 items-center justify-between gap-3 border-b border-stone-200 py-2 pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] dark:border-stone-800">
-            <h2 id={titleId} className="min-w-0 flex-1 text-lg font-semibold">{title}</h2>
+            <h2 ref={heading} tabIndex={-1} id={titleId} className="min-w-0 flex-1 text-lg font-semibold focus:outline-none">{title}</h2>
             <ThemeToggle />
             <button type="button" disabled={!dismissible} onClick={onClose}
               className="min-h-12 cursor-pointer rounded-lg px-3 text-sm font-medium hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-green-600 disabled:opacity-50 dark:hover:bg-stone-800">

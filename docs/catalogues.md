@@ -121,15 +121,17 @@ family, crop and material IDs remain unchanged. The hierarchy is **Family → Cr
 can carry an optional scientific name; botanical species are not another table.
 Select a crop without specifying a cultivar when the variety is unknown.
 
-The **Catalogue section** selector includes families, crops, cultivars, seed mixtures,
-calendars and coverage, plus mulch materials and categories. Select a crop or cultivar
+The catalogue has visible **Plants**, **Calendar**, and **Mulch** groups. Plants contains
+crops, families, cultivars, and seed mixtures. Calendar opens the monthly growing
+calendar; calendar profiles and coverage are administrator configuration. Mulch
+contains materials, with category configuration available to administrators. Select a crop or cultivar
 name, or **View details**, to open one page containing its identity, spacing, notes,
 **Care guidance**, **Planting depths**, **Companions**, **Rotation rules** and **Growing
 calendar**. All sections are visible together, without tabs or collapsed panels.
 Administrators can edit every field directly. One persistent **Save** button saves
 the entire crop or cultivar, including relationships and calendar windows, as one
 transaction. Nothing is written until Save. **Discard changes** restores the whole
-loaded draft; unsaved changes prevent navigation and warn before closing the page.
+loaded draft; unsaved changes offer **Save and leave**, **Discard and leave**, or **Stay** when navigating, and warn before closing the page.
 Failed saves keep every edit. The form checks crop/cultivar revisions as well as
 changed guidance rows and inherited sources; stale or invalid changes roll back
 all writes. Ordinary users see the same fields without editing controls.
@@ -138,8 +140,13 @@ The owner is fixed while editing. Empty care and spacing fields use the crop/fam
 recommendation shown in the field. Explicit **No** remains an override. Planting
 depths are shown for every method; clearing an owned depth restores its inherited
 value (or unknown). Editing an inherited companion, rotation or calendar row creates
-an override for the selected crop/cultivar and preserves the source. Removing owned
-rows takes effect with Save and can be undone before saving.
+an override for the selected crop/cultivar and preserves the source. Companions are two linked-plant lists: **Suggestions** and **Caution**. Rotations
+use **Favourable after** and **Avoid after** lists of previous crops, cultivars or
+families. Select a plant to add it, use the move control to change its list, and
+remove or undo owned links before saving. A plant is listed once per relationship
+type; inherited links use the most specific available recommendation. Relationship
+notes are no longer displayed or edited; existing stored notes are retained.
+Removing owned links takes effect with Save and can be undone before saving.
 
 Apply `202611170028_crop_editor.sql` after 027 to enable the administrator-only
 `myco_save_crop_editor` transaction. It permits only named catalogue fields and
@@ -299,3 +306,40 @@ Referenced cultivars cannot be removed while a mixture uses them.
 Broadcast areas capture the mixture name, notes, revision and full component
 plant snapshots. They store their own density in g/m². Catalogue changes never
 rewrite saved area composition or history. See [Unified areas](areas.md).
+
+
+## Navigation and growing calendar
+
+The shared **Gardens**, **Catalogue**, and **Growing calendar** navigation is available
+in garden, bed, and focused-area screens. Browsing preserves the mounted editor,
+selection and controls. Contextual Back returns to the origin; changing gardens
+continues to use the existing save checks. Catalogue section searches and list
+positions are retained when browsing details or switching sections. Failed saves
+keep all form values and prevent the requested navigation.
+
+The growing calendar starts with the current month and all catalogue crops. Use
+month arrows, **Today**, crop/variety search, and activity filtering; **In this garden**
+restricts results to crops in the latest saved garden plan, including mixtures.
+**Annual view** shows all twelve months. Variety results apply cultivar overrides
+and label inherited activities. Crop details expose the existing care, depth, and
+calendar editor. Month fields use month names. Regional coverage follows the active
+garden; an explicit reference-profile choice is available when coverage is missing.
+This is recurring seasonal guidance rather than a dated work or harvest prediction.
+
+Apply `202611190029_calendar_cleanup.sql` after migration 028. It merges adjacent or
+overlapping windows, including December–January adjacency, while preserving every
+active month. Separate seasonal gaps remain separate. Only notes exactly repeating
+the imported English month ranges are cleared; contextual notes remain. Both calendar
+save paths use the same normalization and retain permissions and version checks.
+Empty windows keep their existing meaning and are not converted to missing guidance.
+
+The cleanup retains the original affected entry and window rows in
+`calendar_cleanup_backup_202611190029`, inaccessible to application users. The optional
+`supabase/rollbacks/202611190029_calendar_cleanup.sql` restores those notes and windows,
+refusing to overwrite entries edited since cleanup. It preserves advancing revisions
+and does not remove normalization from future saves. Reapplying the migration is safe.
+
+The connected database was updated on 19 November 2026: 181 activities retained,
+204 → 199 windows, 176 repeated notes cleared, and five contextual notes retained.
+The checksum over all activity/month pairs was unchanged:
+`505a9a081549fd02926ceee37d743339`.

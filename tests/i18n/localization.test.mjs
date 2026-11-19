@@ -21,7 +21,7 @@ const module=await import(pathToFileURL(file).href);
 let root;
 afterEach(async()=>{if(root)await act(async()=>root.unmount());root=null;});
 after(()=>{dom.window.close();rmSync(directory,{recursive:true,force:true});});
-// Fixture translations exercise the extension API; English is the only shipped language.
+// Fixture translations exercise the extension API alongside shipped suggestion messages.
 const messages={...module.catalogues,it:{
   'record.garden':'Registra modifiche al giardino','record.bed':'Registra modifiche all’aiuola',
   'record.recording':'Registrazione…','record.confirmBedRequired':'Conferma il lavoro completato.',
@@ -46,7 +46,8 @@ test('regional languages resolve to registered catalogues and unsupported or inv
   assert.equal(module.createI18n('it-IT',messages).locale,'it');
   assert.equal(module.createI18n('IT',messages).t('record.garden'),messages.it['record.garden']);
   for(const locale of ['fr-FR','not_a_locale',''])assert.equal(module.createI18n(locale,messages).locale,'en');
-  assert.equal(module.createI18n('it').locale,'en','unregistered languages are not advertised as available');
+  assert.equal(module.createI18n('it').locale,'it');
+  assert.equal(module.createI18n('it').t('suggestions.today'),'Oggi');
 });
 
 test('missing translations use English and interpolation preserves values literally',()=>{

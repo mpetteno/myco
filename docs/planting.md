@@ -11,7 +11,7 @@ it on desktop. Each opens a dedicated full-screen bed
 editor with a top bar, bed drawing and bottom command toolbar. Any garden editor can plan plants;
 catalogue administrator access is only needed to change the shared references.
 
-Desktop controls sit beside the canvas. On phones, **Areas**, **Bed** and **Recap**
+Desktop controls sit beside the canvas. On phones, **Areas**, **Bed** and **Summary**
 expand controls below the drawing; **Hide controls** restores the full drawing
 area. These controls are part of the page, not modal dialogs. Both editor screens
 follow the visual viewport so the drawing resizes when the on-screen keyboard
@@ -75,7 +75,7 @@ its neighbours. Live previews use the same checks as the atomic save.
 **Bed** controls save the bed name and size immediately through the existing
 garden save queue. Size changes cannot crop saved or draft planting areas.
 **Areas** also provides reference
-refresh and **Clear area plan** (autosaved). **Recap** is a read-only summary:
+refresh and **Clear area plan** (autosaved). **Summary** is a read-only summary:
 plant totals grouped by type, per-area plant/row counts and dimensions, bed and
 assigned surface sizes in m², space outside planting areas, companion guidance
 and mulch-area/layer totals. Counts follow the current preview using each area's row and border spacing. Broadcast seed quantities are shown separately from
@@ -83,13 +83,13 @@ individual plant counts. Invalid drafts explain why counts are unavailable.
 Mulch layers are attached to the selected area; see [mulch](mulch.md). Clearing
 the area plan removes all areas and their mulch layers together.
 Switching controls keeps the draft. Shared references are managed separately on
-**Your gardens → Catalogue**. Applied plant points
+**Catalogue in the garden header**. Applied plant points
 also appear in the main garden drawing. Garden copy/delete keyboard shortcuts
 are inactive inside the bed editor to protect the bed while working with areas.
 
 ## Garden recap
 
-The garden toolbar also has **Recap**. It groups plants by their saved type ID
+The garden toolbar also has **Summary**. It groups plants by their saved type ID
 across every displayed bed, using the same geometry, spacing overrides and
 per-area border clearances as the drawing. It shows the total bed footprint in m²,
 including beds with no planting plan. Totals follow historical snapshots without

@@ -1,8 +1,10 @@
+import { useScopedId } from './FieldScope';
 import type { ComponentProps } from 'react';
 
 type SelectFieldProps = ComponentProps<'select'> & { id: string; label: string };
 
 export function SelectField({ id, label, children, ...props }: SelectFieldProps) {
+  id = useScopedId(id);
   return <label htmlFor={id} className="block space-y-2 text-sm font-medium">
     <span>{label}</span>
     <select {...props} id={id}

@@ -10,11 +10,18 @@ export const removeCultivar = (current: ReferenceRow): Promise<void> => removeCa
 export async function loadReferenceData(userId: string): Promise<ReferenceData> {
   const tables = [...referenceTables, 'plant_types', 'plant_families', 'calendar_windows'] as const;
   const client = getSupabaseClient();
-  const results = await Promise.all(tables.map((table) => client.from(table).select('*').order('created_at')));
-  for (const result of results) if (result.error) throw catalogueError(result.error);
+  const results = await Promise.all(tables.map(async (table) => {
+    const rows: ReferenceRow[] = [];
+    for (let offset = 0; ; offset += 200) {
+      const { data, error } = await client.from(table).select('*').order('created_at').order('id').range(offset, offset + 199);
+      if (error) throw catalogueError(error);
+      rows.push(...data as ReferenceRow[]);
+      if (data.length < 200) return rows;
+    }
+  }));
   const admin = await client.from('catalogue_administrators').select('user_id').eq('user_id', userId).maybeSingle();
   if (admin.error) throw catalogueError(admin.error);
-  return { ...Object.fromEntries(tables.map((table, index) => [table, results[index].data ?? []])), isAdmin: !!admin.data } as ReferenceData;
+  return { ...Object.fromEntries(tables.map((table, index) => [table, results[index]])), isAdmin: !!admin.data } as ReferenceData;
 }
 export async function saveReference(table: ReferenceTable, payload: Record<string, unknown>, current?: ReferenceRow,
   windows?: { start_month: number; end_month: number }[]): Promise<void> {

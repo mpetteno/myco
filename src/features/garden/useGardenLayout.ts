@@ -1,5 +1,5 @@
 import { areasFit, validateAreaPlan } from '../area-editor/areaPlan';
-import { useRef, useState } from 'react';
+import { useUndoState } from '../../shared/hooks/useUndoState';
 import { bedsOverlap, findFreePosition, isInsideGarden } from '../beds/bed';
 import type { Bed, BedBounds, BedDetails, BedCopy, BedPlans } from '../beds/bed';
 import { getBedMovePosition } from '../beds/bedMovement';
@@ -13,13 +13,11 @@ import { previewPlanting } from '../planting/plantingGeometry';
 import { mulchAreasFit, validateMulchPlan } from '../mulch/mulchPlan';
 
 export function useGardenLayout(initial: GardenDocument, onChange: (document: GardenDocument) => void) {
-  const [document, setDocument] = useState(initial);
-  const snapshot = useRef(initial);
+  const edits = useUndoState(initial);
+  const document = edits.value, snapshot = edits.current;
 
   function commit(next: GardenDocument) {
-    snapshot.current = next;
-    setDocument(next);
-    onChange(next);
+    if (edits.setValue(next)) onChange(next);
   }
   function setBeds(beds: Bed[]) { commit({ ...snapshot.current, beds }); }
   function nextId() {
@@ -74,6 +72,15 @@ export function useGardenLayout(initial: GardenDocument, onChange: (document: Ga
       return canResizeBed(resized, dimensions, beds) ? resized : { ...bed };
     }));
   }
+  function positionBed(bedId: string, position: BedPosition): string | null {
+    const { beds, dimensions } = snapshot.current;
+    const bed = beds.find((item) => item.id === bedId);
+    if (!bed) return 'Select a bed first.';
+    const next = getBedMovePosition(bed, position, dimensions, beds);
+    if (!next || next.xCm !== position.xCm || next.yCm !== position.yCm) return 'This position would overlap a bed or extend outside the garden.';
+    setBeds(beds.map((item) => item.id === bedId ? { ...item, ...next } : item));
+    return null;
+  }
 
   function pasteBed(copied: BedCopy): Bed | null {
     const { dimensions, beds } = snapshot.current;
@@ -120,5 +127,13 @@ export function useGardenLayout(initial: GardenDocument, onChange: (document: Ga
     return null;
   }
 
-  return { ...document, adopt: (next: GardenDocument) => { snapshot.current=next;setDocument(next); }, applyDimensions, saveBed, moveBed, resizeBed, pasteBed, deleteBed, renameGarden, saveBedPlan };
+  function undo() {
+    const next = edits.undo();
+    if (next) onChange(next);
+  }
+  function redo() {
+    const next = edits.redo();
+    if (next) onChange(next);
+  }
+  return { ...document, adopt: edits.reset, undo, redo, canUndo: edits.canUndo, canRedo: edits.canRedo, applyDimensions, saveBed, moveBed, positionBed, resizeBed, pasteBed, deleteBed, renameGarden, saveBedPlan };
 }

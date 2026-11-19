@@ -1,3 +1,4 @@
+import { useFormLeave, useGuardedBack } from '../../shared/navigation/WorkspaceNavigation';
 import { useI18n } from '../../shared/i18n/I18nProvider';
 import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
@@ -28,6 +29,9 @@ export function PlantEntryForm({ kind, families, current, onSave, onCancel, canc
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const busy = useRef(false);
+  const guardedBack = useGuardedBack(onCancel);
+  const [originalFields] = useState(() => JSON.stringify([name,notes,familyId,plant,row,border,scientificName,livingMulchEnabled]));
+  const formRef = useFormLeave(JSON.stringify([name,notes,familyId,plant,row,border,scientificName,livingMulchEnabled]) !== originalFields, pending, submit, onCancel);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy.current) return;
@@ -36,11 +40,11 @@ export function PlantEntryForm({ kind, families, current, onSave, onCancel, canc
     const problem = kind === 'plant' ? validatePlantDetails(plantDetails) : validateDetails(details);
     if (problem) { setError(problem); return; }
     busy.current = true; setPending(true); setError('');
-    try { await onSave(kind === 'plant' ? plantDetails : details); }
+    try { await onSave(kind === 'plant' ? plantDetails : details); return true; }
     catch (problem) { setError(catalogueError(problem).message); }
     finally { busy.current = false; setPending(false); }
   }
-  return <form onSubmit={submit} className="space-y-4">
+  return <form ref={formRef} onSubmit={submit} className="space-y-4">
     <h3 className="font-semibold">{current ? 'Edit' : 'Add'} {kind === 'plant' ? 'crop' : 'plant family'}</h3>
     <TextField id="catalogue-entry-name" label="Name" required maxLength={100} value={name} disabled={pending} onChange={(event) => setName(event.target.value)} />
     {kind === 'plant' && <SelectField id="catalogue-family" label="Family" required value={familyId} disabled={pending} onChange={(event) => setFamilyId(event.target.value)}>
@@ -57,6 +61,6 @@ export function PlantEntryForm({ kind, families, current, onSave, onCancel, canc
     <TextField id="catalogue-entry-notes" label="Notes (optional)" maxLength={2000} value={notes} disabled={pending} onChange={(event) => setNotes(event.target.value)} />
     <p role="alert" className="text-sm text-red-700 empty:hidden dark:text-red-400">{error}</p>
     <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Save entry'}</Button>
-    <Button type="button" variant="secondary" disabled={pending} onClick={onCancel}>{cancelLabel ?? 'Back to catalogue'}</Button>
+    <Button type="button" variant="secondary" disabled={pending} onClick={guardedBack}>{cancelLabel ?? 'Back to catalogue'}</Button>
   </form>;
 }

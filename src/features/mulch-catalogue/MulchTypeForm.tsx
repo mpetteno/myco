@@ -1,3 +1,4 @@
+import { useFormLeave, useGuardedBack } from '../../shared/navigation/WorkspaceNavigation';
 import { SelectField } from '../../shared/ui/SelectField';
 import { useI18n } from '../../shared/i18n/I18nProvider';
 import type { MulchCatalogue } from './mulchCatalogue';
@@ -23,6 +24,9 @@ export function MulchTypeForm({ catalogue, current, onSave, onCancel }: MulchTyp
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const busy = useRef(false);
+  const guardedBack = useGuardedBack(onCancel);
+  const [originalFields] = useState(() => JSON.stringify([name,notes,categoryId,plantKey]));
+  const formRef = useFormLeave(JSON.stringify([name,notes,categoryId,plantKey]) !== originalFields, pending, submit, onCancel);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy.current) return;
@@ -31,11 +35,11 @@ export function MulchTypeForm({ catalogue, current, onSave, onCancel }: MulchTyp
     const problem = validateMulchDetails(details);
     if (problem) { setError(problem); return; }
     busy.current = true; setPending(true); setError('');
-    try { await onSave(details); }
+    try { await onSave(details); return true; }
     catch (problem) { setError(mulchCatalogueError(problem).message); }
     finally { busy.current = false; setPending(false); }
   }
-  return <form onSubmit={submit} className="space-y-4">
+  return <form ref={formRef} onSubmit={submit} className="space-y-4">
     <h3 className="font-semibold">{current ? 'Edit mulch type' : 'Add mulch type'}</h3>
     <TextField id="mulch-type-name" label="Name" required maxLength={100} value={name} disabled={pending} onChange={(event) => setName(event.target.value)} />
     <SelectField id="mulch-category" label={t('catalogue.category')} value={categoryId} required={!current || !!current.categoryId} disabled={pending} onChange={(e) => { setCategoryId(e.target.value); setPlantKey(''); }}>
@@ -51,6 +55,6 @@ export function MulchTypeForm({ catalogue, current, onSave, onCancel }: MulchTyp
     <TextField id="mulch-type-notes" label="Notes (optional)" maxLength={2000} value={notes} disabled={pending} onChange={(event) => setNotes(event.target.value)} />
     <p role="alert" className="text-sm text-red-700 empty:hidden dark:text-red-400">{error}</p>
     <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Save mulch type'}</Button>
-    <Button type="button" variant="secondary" disabled={pending} onClick={onCancel}>Back to catalogue</Button>
+    <Button type="button" variant="secondary" disabled={pending} onClick={guardedBack}>Back to catalogue</Button>
   </form>;
 }

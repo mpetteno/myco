@@ -1,3 +1,4 @@
+import { italianAdviceReferenceMessages, italianSuggestionMessages } from '../../features/suggestions/suggestionMessages';
 import { en } from './en';
 
 export type TranslationKey = keyof typeof en;
@@ -5,8 +6,8 @@ export type Messages = Partial<Record<TranslationKey, string>>;
 export type Catalogues = Record<string, Messages>;
 export type Translator = (key: TranslationKey, values?: Record<string, string | number>) => string;
 
-// Register future language catalogues here. Missing entries fall back to English.
-export const catalogues: Catalogues = { en };
+// Italian suggestion messages are available; other untranslated UI falls back to English.
+export const catalogues: Catalogues = { en, it: { ...italianSuggestionMessages, ...italianAdviceReferenceMessages } };
 
 export function createI18n(requestedLocale: string, messages: Catalogues = catalogues) {
   let locale = 'en';

@@ -66,7 +66,7 @@ test('calendar windows are saved atomically, support disjoint and wrapping range
   await denied(db.query('select public.myco_save_calendar_entry(null,null,$1,$2)',[details,[]]));
   await asUser(admin);
   let entry = (await db.query('select * from public.myco_save_calendar_entry(null,null,$1,$2)',[details,JSON.stringify([{start_month:2,end_month:4},{start_month:10,end_month:1}])])).rows[0];
-  assert.equal((await db.query('select * from public.calendar_windows where calendar_entry_id=$1',[entry.id])).rows.length,2);
+  assert.deepEqual((await db.query('select start_month,end_month from public.calendar_windows where calendar_entry_id=$1',[entry.id])).rows,[{start_month:10,end_month:4}]);
   await denied(db.query('insert into public.calendar_windows(calendar_entry_id,start_month,end_month) values($1,3,4)',[entry.id]));
   await invalid(db.query('select public.myco_save_calendar_entry($1,$2,$3,$4)',[entry.id,entry.version,details,JSON.stringify([{start_month:0,end_month:5}])]));
   assert.equal(Number((await db.query('select version from public.plant_calendar_entries where id=$1',[entry.id])).rows[0].version),Number(entry.version));

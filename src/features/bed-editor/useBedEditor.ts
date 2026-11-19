@@ -1,4 +1,8 @@
+import { useBedSuggestions } from '../suggestions/useBedSuggestions';
+import type { SuggestionContext } from '../suggestions/useBedSuggestions';
+import type { PlantingSuggestion } from '../suggestions/suggestionEngine';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useUndoState } from '../../shared/hooks/useUndoState';
 import type { Bed, BedBounds, BedPlans } from '../beds/bed';
 import { loadCatalogue } from '../catalogue/catalogueRepository';
 import type { Catalogue } from '../catalogue/catalogue';
@@ -17,14 +21,15 @@ import { freeArea } from '../planting/plantingAreas';
 import { MAX_AREAS, emptyMixtureSelection, areaPlanFromBed, emptyAreaPlan, rowPlan, resizePlanAreas, validateAreaPlan } from '../area-editor/areaPlan';
 import type { AreaKind, AreaPurpose, BedAreaPlan, PlanArea, SeedSelection } from '../area-editor/areaPlan';
 
-export function useBedEditor({ bed, userId, onSavePlan, beforeLeaving, onBack }: { bed: Bed; userId: string;
-  onSavePlan: (plans: BedPlans) => string | null; beforeLeaving: () => Promise<string | null>; onBack: () => void; preserveFormat?: boolean }) {
+export function useBedEditor({ bed, userId, onSavePlan, beforeLeaving, onBack, suggestionContext }: { bed: Bed; userId: string;
+  onSavePlan: (plans: BedPlans) => string | null; beforeLeaving: () => Promise<string | null>; onBack: () => void; preserveFormat?: boolean; suggestionContext?: SuggestionContext }) {
   const readPlan = (source: Bed) => {
     try { return { plan: areaPlanFromBed(source), warning: '' }; }
     catch (problem) { return { plan: emptyAreaPlan(), warning: (problem as Error).message }; }
   };
   const [initial] = useState(() => readPlan(bed));
-  const [plan, setPlan] = useState<BedAreaPlan>(initial.plan);
+  const edits = useUndoState<BedAreaPlan>(initial.plan);
+  const plan = edits.value, setPlan = edits.setValue;
   const [savedKey, setSavedKey] = useState(() => JSON.stringify(plan));
   const [selectedId, setSelectedId] = useState<string | null>(plan.areas[0]?.id ?? null);
   const [catalogue, setCatalogue] = useState<Catalogue | null>(null);
@@ -47,6 +52,7 @@ export function useBedEditor({ bed, userId, onSavePlan, beforeLeaving, onBack }:
     });
     return () => { alive = false; };
   }, [userId, attempt]);
+  const suggestions = useBedSuggestions(userId, suggestionContext, { bed, plan, selectedId, catalogue, mixtures }, attempt);
   const selected = plan.areas.find((area) => area.id === selectedId);
   const rows = useMemo(() => rowPlan(plan), [plan]);
   const preview = useMemo(() => rows.areas.length ? previewPlanting(rows, bed) : { points: [], rowGuides: [], counts: [], error: null }, [rows, bed]);
@@ -71,7 +77,9 @@ export function useBedEditor({ bed, userId, onSavePlan, beforeLeaving, onBack }:
   }
   function bounds(id: string, next: BedBounds) {
     const areas = resizePlanAreas(plan, id, next, bed);
-    if (areas) setPlan({ ...plan, areas });
+    if (!areas) return 'This position or size would overlap an area, extend outside the bed, or leave too little room for planting.';
+    setPlan({ ...plan, areas });
+    return null;
   }
   function plantFor(key: string) {
     const cultivar = key.startsWith('cultivar:') ? catalogue?.cultivars?.find((item) => item.id === key.slice(9)) : undefined;
@@ -94,6 +102,31 @@ export function useBedEditor({ bed, userId, onSavePlan, beforeLeaving, onBack }:
     if (!plant) return;
     if (selected.kind === 'broadcast') updateArea(selected.id, { sowing: { kind: 'crop', plant }, ...(selected.sowing.kind === 'mixture' ? { density: 0, densityUnit: 'g_m2' as const } : {}) });
     if (selected.kind === 'rows') updateArea(selected.id, { plant, plantSpacingCm: plant.plantSpacingCm ?? 0, rowSpacingCm: plant.rowSpacingCm ?? (selected.rowCount != null ? 5 : 0) });
+  }
+  function applySuggestion(suggestion: PlantingSuggestion) {
+    const action = suggestion.action;
+    if (!selected || selected.id !== suggestion.areaId || !action) return;
+    const base = { id: selected.id, name: selected.name, xCm: selected.xCm, yCm: selected.yCm,
+      widthCm: selected.widthCm, lengthCm: selected.lengthCm, mulch: selected.mulch };
+    let next: PlanArea;
+    if (action.purpose === 'green_manure') {
+      const mixture = mixtures.find((m) => `mixture:${m.id}` === action.selectionKey);
+      if (!mixture || !catalogue) return;
+      try {
+        next = { ...base, kind: 'broadcast', purpose: 'green_manure', sowing: { kind: 'mixture', mixture: snapshotSeedMixture(mixture, catalogue) }, density: 0, densityUnit: 'g_m2' };
+      } catch (problem) { setError((problem as Error).message); return; }
+    } else {
+      const plant = plantFor(action.selectionKey);
+      if (!plant) return;
+      next = selected.kind === 'broadcast'
+        ? { ...base, kind: 'broadcast', purpose: 'crop', sowing: { kind: 'crop', plant }, density: selected.sowing.kind === 'crop' ? selected.density : 0, densityUnit: 'g_m2' }
+        : { ...base, kind: 'rows', purpose: 'crop', plant, plantSpacingCm: plant.plantSpacingCm ?? 0,
+          rowSpacingCm: plant.rowSpacingCm ?? (selected.kind === 'rows' ? selected.rowSpacingCm : 5),
+          rowDirection: selected.kind === 'rows' ? selected.rowDirection : defaultRowDirection(bed),
+          rowCount: selected.kind === 'rows' ? selected.rowCount : DEFAULT_AREA_ROWS };
+    }
+    setError('');
+    setPlan((current) => ({ ...current, areas: current.areas.map((a) => a.id === selected.id ? next : a) }));
   }
   function changeKind(kind: AreaKind, purpose: AreaPurpose = selected?.purpose ?? 'crop') {
     if (!selected || (selected.kind === kind && selected.purpose === purpose)) return;
@@ -179,7 +212,7 @@ export function useBedEditor({ bed, userId, onSavePlan, beforeLeaving, onBack }:
   }
   function resetFromBed(next: Bed) {
     const loaded = readPlan(next), value = loaded.plan;
-    setPlan(value); setSelectedId(value.areas[0]?.id ?? null); setSavedKey(JSON.stringify(value)); lastAutoAttempt.current = null; setError(loaded.warning);
+    edits.reset(value); setSelectedId(value.areas[0]?.id ?? null); setSavedKey(JSON.stringify(value)); lastAutoAttempt.current = null; setError(loaded.warning);
   }
   async function returnToGarden() {
     if (busy.current) return;
@@ -188,11 +221,18 @@ export function useBedEditor({ bed, userId, onSavePlan, beforeLeaving, onBack }:
     catch (problem) { setError(gardenStorageError(problem).message); }
     finally { busy.current = false; setLeaving(false); }
   }
+  function restoreEdit(next: BedAreaPlan | null) {
+    if (!next) return;
+    lastAutoAttempt.current = null;
+    setSelectedId(next.areas.some((area) => area.id === selectedId) ? selectedId : next.areas[0]?.id ?? null);
+    setError('');
+  }
   function discardDraft() { resetFromBed(bed); }
   return { draft: { plan, setPlan, selected, selectedId, setSelectedId, catalogue, mixtures, loading, error: error || referenceError,
       setError, retry: () => setAttempt((value) => value + 1), updateArea, bounds, choosePlant, changeKind, changePurpose, addArea, splitSelected, removeSelected },
-    rows, preview, advice, validation, dirty, leaving, confirmLeave, setConfirmLeave, mulchCatalogue,
-    addLayer, chooseMaterial, removeLayer, reorderLayer,
+    suggestions, suggestionLocation: suggestionContext?.location, applySuggestion, rows, preview, advice, validation, dirty, leaving, confirmLeave, setConfirmLeave, mulchCatalogue,
+    addLayer, chooseMaterial, removeLayer, reorderLayer, canUndo: edits.canUndo, canRedo: edits.canRedo,
+    undo: () => restoreEdit(edits.undo()), redo: () => restoreEdit(edits.redo()),
     back: () => { if (dirty) setConfirmLeave(true); else void returnToGarden(); },
     discardAndBack: () => { discardDraft(); setConfirmLeave(false); void returnToGarden(); },
     discardDraft, resetFromBed, clearPlan: () => { lastAutoAttempt.current = null; setPlan(emptyAreaPlan()); setSavedKey(''); setSelectedId(null); setError(''); } };

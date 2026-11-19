@@ -19,24 +19,30 @@ export function BedLabel({ bed, pixelsPerCm, dark }: BedLabelProps) {
     context.font = '11px system-ui, sans-serif';
     return { nameWidthPx, sizeWidthPx: context.measureText(size).width + 12 };
   }, [bed.name, size]);
-  const nameWidthCm = measured.nameWidthPx / pixelsPerCm;
+  // A long name must not push the size badge beyond the drawing on phones.
+  // Keep the full name in the accessible bed list and selected-bed toolbar.
+  const availablePx = Math.max(80, Math.max(bed.widthCm, bed.lengthCm) * pixelsPerCm - 12);
+  const inline = availablePx >= measured.sizeWidthPx + 88;
+  const nameWidthCm = Math.min(measured.nameWidthPx + 8, inline ? availablePx - measured.sizeWidthPx - 8 : availablePx) / pixelsPerCm;
   const sizeWidthCm = measured.sizeWidthPx / pixelsPerCm;
   const gapCm = 8 / pixelsPerCm;
   const heightCm = 22 / pixelsPerCm;
-  const totalWidthCm = nameWidthCm + gapCm + sizeWidthCm;
+  const totalWidthCm = inline ? nameWidthCm + gapCm + sizeWidthCm : Math.max(nameWidthCm, sizeWidthCm);
+  const badgeX = inline ? nameWidthCm + gapCm : (totalWidthCm - sizeWidthCm) / 2;
+  const badgeY = inline ? 0 : heightCm;
 
   return (
     <Group x={bed.xCm + bed.widthCm / 2} y={bed.yCm + bed.lengthCm / 2}
       rotation={bed.lengthCm > bed.widthCm ? -90 : 0} listening={false}>
-      <Group x={-totalWidthCm / 2} y={-heightCm / 2}>
+      <Group x={-totalWidthCm / 2} y={-(inline ? heightCm : heightCm * 2) / 2}>
         <Text text={bed.name} width={nameWidthCm + 1 / pixelsPerCm} height={heightCm}
           fontSize={13 / pixelsPerCm} fontFamily="system-ui, sans-serif"
           fill={colors.name} stroke={colors.nameOutline} strokeWidth={2 / pixelsPerCm} fillAfterStrokeEnabled
-          verticalAlign="middle" wrap="none" />
-        <Rect x={nameWidthCm + gapCm} width={sizeWidthCm} height={heightCm}
+          verticalAlign="middle" wrap="none" ellipsis />
+        <Rect x={badgeX} y={badgeY} width={sizeWidthCm} height={heightCm}
           fill={colors.label} stroke={colors.bedBorder}
           strokeWidth={0.75 / pixelsPerCm} cornerRadius={4 / pixelsPerCm} />
-        <Text x={nameWidthCm + gapCm} text={size} width={sizeWidthCm} height={heightCm}
+        <Text x={badgeX} y={badgeY} text={size} width={sizeWidthCm} height={heightCm}
           fontSize={11 / pixelsPerCm} fontFamily="system-ui, sans-serif"
           fill={colors.labelText} align="center" verticalAlign="middle" wrap="none" />
       </Group>

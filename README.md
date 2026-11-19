@@ -36,6 +36,7 @@ npm run preview    # Serve the production build locally
 - `src/features/area-editor`: focused planting and mulch area editing.
 - `src/features/planting`: per-bed planting areas, row previews, capacity and plan-specific overrides.
 - `src/features/bed-editor`: dedicated bed screen, responsive controls and draft navigation.
+- `src/features/suggestions`: automatic seasonal, spatial-history, rotation, companion and care advice. See [suggestions](docs/suggestions.md).
 - `src/features/garden`: garden screen, dimensions, grid and layout state.
 - `src/features/beds`: bed forms, list, drawing and placement rules.
 - `src/shared/ui`: small reusable buttons, fields and modal sheets.
@@ -51,8 +52,8 @@ Apply the [garden migrations](docs/saved-gardens.md) before using the editor.
 
 Once signed in, choose **Create a garden**, enter its name, width and length,
 then select **Create garden**. Tap the garden name in the top bar to switch
-gardens or create another one. Use **Edit garden → Rename garden** to rename it.
-Use **Edit garden → Garden size** to change dimensions. Dimensions must be at
+gardens or create another one. Use **Garden settings → Rename garden** to rename it.
+Use **Garden settings → Garden size** to change dimensions. Dimensions must be at
 least 5 cm and round to the nearest 5 cm when applied. You can update them with
 the same form, which opens with the current dimensions and closes after a successful save.
 The empty green garden shows a repeating 5 cm grid and fits entirely into the
@@ -64,7 +65,7 @@ Bed dimensions must be at least 5 cm and snap to the nearest 5 cm. New beds occu
 the first free space on the grid, scanning from the top left without overlapping.
 If no space fits, the form asks for smaller dimensions or a larger garden.
 Use **Beds** to browse the bed list, or select a bed in the drawing and choose
-**Edit bed** to open its dedicated editing and planning screen. Its **Bed**
+**Edit bed** to open its dedicated editing and planning screen. Its **Settings**
 controls edit the name and dimensions, and **Back to garden** returns to the layout.
 Editing sizes in the form keeps its
 top-left corner fixed and rejects overlap or overflow. Shrinking the garden is
@@ -83,8 +84,8 @@ indicate bed gaps; all distances are in centimetres. Beds that only face each
 other diagonally are not treated as side gaps. Dashed purple lines show exact
 edge-to-edge or centre-to-centre alignment with another bed or the garden.
 Guides are visual only and do not add any attraction or snapping beyond the
-existing 5 cm grid. Numeric position inputs are not planned; positioning uses
-the mouse or touch.
+existing 5 cm grid. Settings → Position in garden also supports numeric positions.
+Area editors offer Position & size for keyboard and precise input.
 
 Select a bed in the drawing or list to show its eight resize handles. Drag an edge
 handle to change one dimension, or a corner handle to change both. The opposite
@@ -103,7 +104,7 @@ and “Herbs copy 2”, and the new bed is selected for editing. Repeated pastes
 the original copied snapshot, even if that bed is later edited.
 If no space fits, paste reports the problem and keeps the copied bed available.
 The shortcuts work outside text fields, without interfering with normal text
-editing. On small screens and touch devices, **More** provides touch controls
+editing. **More → Bed actions** provides controls on all devices
 to edit, copy, paste or delete the selected bed. Paste remains available after
 deselecting a bed, provided a copy exists. This clipboard belongs to the app
 and clears on reload.
@@ -124,7 +125,7 @@ Its longer dimension follows the longer dimension of the available view: usually
 horizontal on desktop and vertical on a portrait phone. Turning the screen
 recalculates the view without changing garden measurements or bed positions.
 Distance labels stay upright and bed labels follow their bed’s displayed longer
-side. Garden settings are available through **Edit garden → Garden size**.
+side. Garden settings are available through **Garden settings → Garden size**.
 The bed list, forms and help open
 only when requested. Selecting a bed keeps the canvas visible and does not open
 its form automatically. Panels appear as bottom sheets on phones and centred
@@ -144,14 +145,14 @@ All garden geometry uses centimetres; only the canvas rendering boundary uses
 screen pixels to fit the garden to its container.
 
 Supabase stores each user's gardens, including names, dimensions and beds.
-Edits save automatically after form submissions and finished drags. The dot by
+Edits save automatically after form submissions and finished drags. The status below
 the garden name indicates saved or pending changes; failures offer recovery.
 Switching gardens and signing out wait for pending saves. Reloading opens the
 most recently updated garden. Row Level Security restricts access to the owner
 and added editors. Native Capacitor packaging remains an upcoming step.
 See [saved gardens](docs/saved-gardens.md) for the schema, failure handling and tests.
 
-Use **Edit garden → Share garden** to add an editor by their confirmed account email, view
+Use **Garden settings → Share garden** to add an editor by their confirmed account email, view
 editors or remove access. Everyone with access can edit the garden's name,
 dimensions and beds; only its owner manages sharing. Shared gardens appear in
 the recipient's garden picker, marked **Shared · Can edit**. The picker refreshes
@@ -187,15 +188,15 @@ retaining prior revisions. Later records and the current plan stay unchanged.
 Select an event and **Delete history entry → Delete entry** to remove it from
 history after confirmation. This preserves later snapshots and the current plan.
 There is one autosaved plan; wait for **All changes saved** before closing the app.
-The bed page also has History navigation. Open area editor provides visible
+The bed page also has History navigation. Focus area provides visible
 settings, zoom controls and stable resizing. See [planning and area editing](docs/activities.md).
 
-Use the garden’s **Recap** for total plants by type across all displayed beds
+Use the garden’s **Summary** for total plants by type across all displayed beds
 and the area occupied by their full rectangles in m². It follows historical
 views as well as the current plan.
 
-Use **Edit garden** for sharing, renaming and garden dimensions. The **More**
-menu keeps catalogues, help and touch copy/paste/delete actions.
+Use **Garden settings** for sharing, renaming and garden dimensions. The **More**
+menu groups History, settings, account, help and copy/paste/delete actions. Catalogue opens directly from the header.
 
 Select a bed and choose **Edit bed**, or open it from **Beds**. On desktop,
 double-click a bed or planting/mulch area to open its editor. Add rectangular areas, assign one plant type to each,
@@ -219,7 +220,7 @@ neighbour no longer fits. Returning waits for pending saves; invalid fields
 require correction or discarding. Planned plant points also
 appear in the main drawing. See
 [planting plans](docs/planting.md) for placement, persistence and limits.
-**Recap** replaces the bed Plan menu with plant totals by type, per-area counts
+**Summary** replaces the bed Plan menu with plant totals by type, per-area counts
 and dimensions, surface sizes in m² and mulch totals. Planting settings and
 catalogue access are under **Areas**.
 
@@ -241,3 +242,23 @@ See [appearance and palette values](docs/appearance.md) for review.
 Recording actions and forms use a typed English message catalogue, with fallback
 and a React provider ready for future languages. See [localization](docs/localization.md)
 for adding a catalogue and migrating more screens. English is the only shipped language.
+
+Undo restores up to 20 recent local edits, including deleted beds, removed areas and cleared planting/mulch. Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z or Ctrl+Y redoes. A new edit clears redo. Garden and area editors keep separate edit histories, cleared when their editor unmounts or the app reloads. Clear area plan requires confirmation. Phone toolbars use one row; Edit selected area opens hidden controls. Fields expand the mobile inspector while focused. See [UI/UX review and validation](docs/ui-ux-review.md).
+
+
+Keyboard copy/paste uses Ctrl/Cmd+C and Ctrl/Cmd+V: a selected bed in the garden,
+or a selected area in a bed/focused area editor. Area copies include planting,
+seed-mixture snapshots and ordered mulch layers with fresh IDs. Copy areas
+between beds in the same garden; paste uses free space without shrinking neighbours.
+Undo/redo follows the active editor and autosaves through the normal queue without
+recording completed history. Native text shortcuts are preserved, and dialogs,
+read-only history and save conflicts block editor shortcuts.
+
+
+App navigation now exposes **Gardens**, **Catalogue**, and **Growing calendar** from
+all editor screens. Catalogue browsing uses Plants, Calendar, and Mulch groups.
+The growing calendar supports monthly and annual views, crop and activity filters,
+and a current-garden filter. Unsaved catalogue navigation offers Save and leave,
+Discard and leave, or Stay. Apply migration `202611190029_calendar_cleanup.sql` for
+calendar range normalization and redundant imported-note cleanup; see
+[catalogue and calendar details](docs/catalogues.md).

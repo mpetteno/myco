@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { Bed, BedCopy } from './bed';
-import { isTextEditingEvent } from '../../shared/keyboard/isTextEditingEvent';
+import { useEditorShortcuts } from '../../shared/keyboard/useEditorShortcuts';
 
 type BedClipboardOptions = {
   selectedBed?: Bed;
@@ -35,25 +35,7 @@ export function useBedClipboard({ selectedBed, onPaste, onSelect, enabled = true
     return true;
   }
 
-  useEffect(() => {
-    if (!enabled) return;
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.defaultPrevented || event.isComposing || event.repeat || event.altKey || event.shiftKey
-        || !(event.ctrlKey || event.metaKey)) return;
-      // Preserve normal text editing and copying in browser form fields.
-      if (isTextEditingEvent(event)) return;
-      const key = event.key.toLowerCase();
-      if (key === 'c' && selectedBed && !window.getSelection()?.toString()) {
-        event.preventDefault();
-        copy();
-      } else if (key === 'v' && copiedBed) {
-        event.preventDefault();
-        paste();
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedBed, copiedBed, onPaste, onSelect, enabled]);
+  useEditorShortcuts({ enabled, onCopy: selectedBed ? copy : undefined, onPaste: copiedBed ? paste : undefined });
 
   return { feedback, copy, paste, canCopy: !!selectedBed, canPaste: !!copiedBed };
 }

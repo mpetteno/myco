@@ -11,10 +11,10 @@ export function GardenHistoryBar({ history, bedView = false }: { history: Return
         {history.current ? 'Garden plan' : `${history.date} · ${history.selected?.title ?? 'No recorded layout'}`}
       </button>
       <button type="button" aria-label="Next event" title="Next event" className={buttonClass} disabled={!next || history.loading || history.saving} onClick={() => { if (next) void history.select(next); }}>→</button>
-      <button type="button" className={buttonClass} disabled={history.saving} onClick={history.today}>Plan</button>
+      <button type="button" className={buttonClass} disabled={history.saving} onClick={history.today}>Current plan</button>
       <button type="button" aria-label="Close history" className={buttonClass} disabled={history.saving} onClick={history.close}>✕</button>
     </div>
-    {!history.current && <p className="pb-2 text-xs text-stone-600 dark:text-stone-400">{'Completed record · choose Edit history record to correct it'}{history.selected ? ` · “${history.selected.title}”${history.selected.date?` on ${history.selected.date}`:''}` : ''}. {bedView ? 'Back to bed returns to editing.' : 'Plan returns to the autosaved garden plan.'}</p>}
+    {!history.current && <p className="pb-2 text-xs text-stone-600 dark:text-stone-400">{'Completed record · choose Edit history record to correct it'}{history.selected ? ` · “${history.selected.title}”${history.selected.date?` on ${history.selected.date}`:''}` : ''}. {bedView ? 'Back to bed returns to editing.' : 'Current plan returns to the editable garden.'}</p>}
     {history.loading && <p role="status" className="pb-2 text-sm">Loading history…</p>}
     {history.error && <p role="alert" className="pb-2 text-sm text-red-700 dark:text-red-400">{history.error}</p>}
     {history.message && <p role="status" className="pb-2 text-sm text-green-800 dark:text-green-400">{history.message}</p>}

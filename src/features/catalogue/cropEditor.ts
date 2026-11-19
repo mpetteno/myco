@@ -14,6 +14,26 @@ const endpoint = (row: ReferenceRow, prefix: 'current' | 'previous') => row[`${p
   : row[`${prefix}_plant_id`] ? `plant:${row[`${prefix}_plant_id`]}` : `family:${row[`${prefix}_family_id`]}`;
 export const editorOwner = (cropId: string, cultivarId?: string): CompanionTarget => ({ kind: cultivarId ? 'cultivar' : 'plant', id: cultivarId ?? cropId });
 
+function uniqueRelationships(rows: EditorRow[]): EditorRow[] {
+  const weights: Record<string, number> = { family: 0, plant: 1, cultivar: 3 };
+  const priority = (row: EditorRow) => {
+    if (row.original) return 100;
+    const source = row.source!;
+    if (row.table === 'companion_rules') {
+      const first = source.first as CompanionTarget, second = source.second as CompanionTarget;
+      return weights[first.kind] + weights[second.kind];
+    }
+    return (source.current_cultivar_id ? 3 : source.current_plant_id ? 1 : 0)
+      + (source.previous_cultivar_id ? 3 : source.previous_plant_id ? 1 : 0);
+  };
+  const selected = new Map<string, EditorRow>();
+  for (const row of rows) {
+    const previous = selected.get(row.values.target);
+    if (!previous || priority(row) > priority(previous) || (priority(row) === priority(previous) && ['caution', 'avoid_after'].includes(row.values.relationship))) selected.set(row.values.target, row);
+  }
+  return [...selected.values()];
+}
+
 export function createCropDraft(data: ReferenceData, catalogue: Catalogue, cropId: string, cultivarId?: string): CropDraft {
   const owner = editorOwner(cropId, cultivarId), ownerKey = targetKey(owner);
   const crop = data.plant_types.find((row) => row.id === cropId)!;
@@ -36,12 +56,12 @@ export function createCropDraft(data: ReferenceData, catalogue: Catalogue, cropI
     const raw = { ...rule, id: rule.id, version: rule.version } as ReferenceRow;
     return row('companion_rules', `companion-${rule.id}`, { target: targetKey(other), relationship: rule.relationship, notes: rule.notes }, own ? raw : undefined, own ? undefined : raw);
   });
-  rows.push(...companions.filter((item) => !item.inherited || !companions.some((other) => !other.inherited && other.values.target === item.values.target)));
+  rows.push(...uniqueRelationships(companions));
   const rotations = data.rotation_rules.filter((item) => matches({ kind: item.current_cultivar_id ? 'cultivar' : item.current_plant_id ? 'plant' : 'family', id: String(item.current_cultivar_id ?? item.current_plant_id ?? item.current_family_id) })).map((item) => {
     const own = endpoint(item, 'current') === ownerKey;
     return row('rotation_rules', `rotation-${item.id}`, { target: endpoint(item, 'previous'), relationship: item.relationship, notes: item.notes }, own ? item : undefined, own ? undefined : item);
   });
-  rows.push(...rotations.filter((item) => !item.inherited || !rotations.some((other) => !other.inherited && other.values.target === item.values.target)));
+  rows.push(...uniqueRelationships(rotations));
   for (const entry of data.calendar_profiles.flatMap((profile) => effectiveCalendar(data, cropId, profile.id, cultivarId))) {
     const item = row('plant_calendar_entries', `calendar-${entry.id}`, Object.fromEntries(['calendar_profile_id', 'activity', 'planting_method', 'notes'].map((key) => [key, entry[key]])), owns(entry) ? entry : undefined, owns(entry) ? undefined : entry);
     item.windows = data.calendar_windows.filter((window) => window.calendar_entry_id === entry.id).map((window) => ({ start_month: window.start_month, end_month: window.end_month }));
@@ -84,4 +104,23 @@ export function cropChanges(draft: CropDraft, initial: CropDraft, cropId: string
     return [{ table: row.table, id: row.original?.id ?? null, version: row.original?.version ?? null, details, remove,
       ...(row.source ? { source_id: row.source.id, source_version: row.source.version } : {}), windows: row.windows }];
   });
+}
+
+export function linkCropRelationship(draft: CropDraft, initial: CropDraft, table: 'companion_rules' | 'rotation_rules', target: string, relationship: string): CropDraft {
+  const existing = draft.rows.find((row) => row.table === table && row.values.target === target);
+  if (existing) {
+    const before = initial.rows.find((row) => row.key === existing.key);
+    const next = existing.inherited && before?.values.relationship === relationship ? structuredClone(before)
+      : { ...existing, removed: false, values: { ...existing.values, relationship, ...(!existing.original ? { notes: '' } : {}) } };
+    return { ...draft, rows: draft.rows.map((row) => row.key === existing.key ? next : row) };
+  }
+  return { ...draft, rows: [...draft.rows, { key: crypto.randomUUID(), table, values: { target, relationship, notes: '' }, inherited: false, removed: false, windows: [] }] };
+}
+
+export function removeCropRelationship(draft: CropDraft, initial: CropDraft, key: string): CropDraft {
+  const row = draft.rows.find((item) => item.key === key);
+  if (!row) return draft;
+  if (row.original) return { ...draft, rows: draft.rows.map((item) => item.key === key ? { ...item, removed: true } : item) };
+  const before = initial.rows.find((item) => item.key === key);
+  return { ...draft, rows: before ? draft.rows.map((item) => item.key === key ? structuredClone(before) : item) : draft.rows.filter((item) => item.key !== key) };
 }

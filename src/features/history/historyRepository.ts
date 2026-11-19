@@ -81,3 +81,35 @@ export async function recordGardenEvent(gardenId: string, version: number, detai
   if (error) throw historyError(error);
   return parseHistorySnapshot(data as EventRow);
 }
+
+// Bulk snapshots for spatial advice. Legacy scoped records are reconstructed in
+// memory; frozen display snapshots remain authoritative, including after edits.
+export async function loadSuggestionHistory(gardenId: string): Promise<GardenEventSnapshot[]> {
+  const client = getSupabaseClient();
+  const access = await client.from('gardens').select('id').eq('id', gardenId).maybeSingle();
+  if (access.error) throw historyError(access.error);
+  if (!access.data) throw historyError({ code: '42501' });
+  const rows: EventRow[] = [];
+  let cursor = 0;
+  while (true) {
+    const { data, error } = await client.from('garden_layout_events').select(`${columns},snapshot,display_snapshot`)
+      .eq('garden_id', gardenId).is('deleted_at', null).gt('event_order', cursor).order('event_order').limit(200);
+    if (error) throw historyError(error);
+    const page = data as EventRow[];
+    rows.push(...page);
+    if (page.length < 200) break;
+    cursor = page.at(-1)!.event_order;
+  }
+  rows.sort((a, b) => a.event_date.localeCompare(b.event_date) || a.event_order - b.event_order);
+  let document: GardenDocument | null = null;
+  return rows.map((row) => {
+    const event = parseHistorySnapshot(row);
+    if (row.display_snapshot || event.kind === 'layout') document = structuredClone(event.document);
+    else {
+      document = actualHistory([
+        ...(document ? [{ ...event, id: 'base', kind: 'layout' as const, order: event.order - 1, document }] : []), event,
+      ], event);
+    }
+    return { ...event, document: structuredClone(document) };
+  });
+}

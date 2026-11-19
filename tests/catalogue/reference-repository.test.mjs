@@ -17,6 +17,15 @@ test('reference reads remain available to non-admins and role checks are scoped 
   assert.equal(data.isAdmin,false);assert.deepEqual(data.plant_cultivars,[]);
   assert.equal(requests.find((r)=>r.url.pathname.endsWith('catalogue_administrators')).url.searchParams.get('user_id'),'eq.reader');
 });
+test('reference guidance loads all pages with a stable order', async () => {
+  const requests = fixture(({ url }) => ({ data: url.pathname.endsWith('calendar_windows')
+    ? url.searchParams.get('offset') === '0' ? Array.from({ length: 200 }, (_, i) => ({ id: `window-${i}` })) : [{ id: 'last-window' }] : [] }));
+  const result = await repo.loadReferenceData('reader');
+  assert.equal(result.calendar_windows.length, 201);
+  const pages = requests.filter((r) => r.url.pathname.endsWith('calendar_windows'));
+  assert.equal(pages.length, 2); assert.equal(pages[1].url.searchParams.get('offset'), '200');
+  assert.equal(pages[0].url.searchParams.get('order'), 'created_at.asc,id.asc');
+});
 test('ordinary entry edits condition on revision and calendar edits send all windows atomically',async()=>{
   const requests=fixture(()=>({data:{id:'saved'}}));
   await repo.saveReference('plant_cultivars',{name:'Crimson Sweet'},{id:'cultivar',version:3});

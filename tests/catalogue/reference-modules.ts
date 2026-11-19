@@ -7,3 +7,5 @@ export * from '../../src/features/gardens/gardenLocation';
 
 export * from '../../src/features/catalogue/cropEditor';
 export * from '../../src/features/catalogue/cropEditorRepository';
+
+export * from '../../src/features/catalogue-reference/calendarMonths';

@@ -2,6 +2,7 @@ import { CropCultivarFields } from '../planting/CropCultivarFields';
 import { Button } from '../../shared/ui/Button';
 import { SelectField } from '../../shared/ui/SelectField';
 import { NumberField } from '../../shared/ui/NumberField';
+import { GeometryForm } from '../../shared/ui/GeometryForm';
 import type { Bed } from '../beds/bed';
 import type { useBedEditor } from '../bed-editor/useBedEditor';
 import { PlantingAreaFields } from '../planting/PlantingAreaFields';
@@ -41,13 +42,14 @@ export function AreaFields({ bed, editor }: { bed: Bed; editor: ReturnType<typeo
       </div>}
     </>}
     <AreaMulchLayers editor={editor} />
+    <GeometryForm key={area.id} id="area-bounds" container="bed" size value={area} onSave={(next) => draft.bounds(area.id, next)} />
   </div>;
 }
 function AreaMulchLayers({ editor }: { editor: ReturnType<typeof useBedEditor> }) {
   const area = editor.draft.selected, catalogue = editor.mulchCatalogue;
   if (!area) return null;
-  return <section aria-label="Area mulch" className="space-y-3 border-t border-stone-200 pt-4 dark:border-stone-700">
-    <h3 className="font-semibold">Mulch</h3>
+  return <details id="area-mulch-controls" aria-label="Area mulch" className="space-y-3 border-t border-stone-200 pt-3 dark:border-stone-700">
+    <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold">Mulch · {area.mulch.length} {area.mulch.length === 1 ? 'layer' : 'layers'}</summary>
     <ol className="space-y-3">{area.mulch.map((layer, index) => <li key={layer.id} className="space-y-3 rounded-lg border border-stone-200 p-3 dark:border-stone-700">
       <SelectField id={`mulch-layer-${layer.id}`} label={`Layer ${index + 1}${index === area.mulch.length - 1 ? ' (top)' : ''}`} value={layer.material.id} onChange={(event) => editor.chooseMaterial(layer.id, event.target.value)}>
         {!catalogue?.types.some((type) => type.id === layer.material.id && type.available !== false) && <option value={layer.material.id}>{layer.material.name} (saved reference)</option>}
@@ -60,5 +62,5 @@ function AreaMulchLayers({ editor }: { editor: ReturnType<typeof useBedEditor> }
       </div>
     </li>)}</ol>
     <Button variant="secondary" disabled={editor.draft.loading || !catalogue?.types.some((type) => type.available !== false) || area.mulch.length >= 8} onClick={editor.addLayer}>Add mulch layer</Button>
-  </section>;
+  </details>;
 }

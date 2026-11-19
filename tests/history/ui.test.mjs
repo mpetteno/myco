@@ -21,7 +21,7 @@ const events = () => [10, 20, 30].map((xCm, index) => ({ id: `event-${index}`, g
   sourceVersion: index + 1, date: `${month}-${index < 2 ? '10' : '20'}`, title: `Change ${index + 1}`, notes: '',
   actorId: 'owner-a', recordedAt: '2026-11-16T12:00:00Z', document: documentAt(xCm) }));
 const button = (label) => [...document.querySelectorAll('button')].find((item) => item.textContent.trim() === label || item.getAttribute('aria-label') === label);
-async function click(label) { const item = button(label); assert.ok(item, `Missing button: ${label}`); assert.equal(item.disabled, false, `${label} is disabled`); await act(async () => item.click()); }
+async function click(label) { if (label === 'History' && !button(label)) await act(async()=>button('More').click()); const item = button(label); assert.ok(item, `Missing button: ${label}`); assert.equal(item.disabled, false, `${label} is disabled`); await act(async () => item.click()); }
 async function type(id, value) {
   const input = document.getElementById(id); assert.ok(input);
   await act(async () => {
@@ -49,7 +49,7 @@ test('previous/next events visit separate same-day snapshots and Plan restores t
   await click('Previous event'); assert.equal(globalThis.__gardenCanvas.beds[0].xCm, 10);
   assert.equal(button('Previous event').disabled, true);
   await click('Next event'); assert.equal(globalThis.__gardenCanvas.beds[0].xCm, 20);
-  await click('Plan'); assert.equal(globalThis.__gardenCanvas.beds[0].xCm, 50);
+  await click('Current plan'); assert.equal(globalThis.__gardenCanvas.beds[0].xCm, 50);
   assert.equal(globalThis.__gardenCanvas.readOnly, false);
 });
 
@@ -68,14 +68,14 @@ test('calendar marks event dates, shows the latest earlier event and never inven
 test('historical selection disables layout mutations, Delete/Backspace and paste while preserving the current layout', async () => {
   await openGarden(); await click('Select fixture bed'); await key('c', { ctrlKey: true });
   await click('History'); await click('Previous event');
-  assert.equal(button('Add bed').disabled, true); assert.equal(button('Edit bed').disabled, true);
+  assert.equal(button('Add bed').disabled, true); assert.equal(button('Edit bed'), undefined);
   await act(async () => {
     globalThis.__gardenCanvas.onMoveBed(bed.id, { xCm: 75, yCm: 0 });
     globalThis.__gardenCanvas.onResizeBed(bed.id, { xCm: 0, yCm: 0, widthCm: 150, lengthCm: 200 });
   });
   await key('Delete'); await key('Backspace'); await key('v', { ctrlKey: true });
   assert.equal(globalThis.__editorFixture.saves.length, 0);
-  await click('Plan'); assert.equal(globalThis.__gardenCanvas.beds[0].xCm, 50);
+  await click('Current plan'); assert.equal(globalThis.__gardenCanvas.beds[0].xCm, 50);
   await key('v', { ctrlKey: true });
   assert.equal(globalThis.__gardenCanvas.beds.length, 2, 'paste works again in the live editor');
 });
@@ -114,7 +114,7 @@ test('a late snapshot response cannot replace the current layout after Plan is s
   let complete;
   globalThis.__editorFixture.historyLoad = () => new Promise((resolve) => { complete = resolve; });
   await click('Previous event'); assert.match(document.body.textContent, /Loading history/);
-  await click('Plan');
+  await click('Current plan');
   await act(async () => complete(events()[2]));
   assert.equal(globalThis.__gardenCanvas.readOnly, false);
   assert.equal(globalThis.__gardenCanvas.beds[0].xCm, 50);
@@ -168,7 +168,7 @@ test('deleting an entry requires confirmation, preserves later snapshots and lea
   assert.equal(button('View completed event: Change 2'),undefined);
   assert.equal(globalThis.__gardenCanvas.beds[0].xCm,10,'falls back to the earlier entry on the selected date');
   await click('Next event');assert.equal(globalThis.__gardenCanvas.beds[0].xCm,30);
-  await click('Plan');assert.equal(globalThis.__gardenCanvas.beds[0].xCm,50);
+  await click('Current plan');assert.equal(globalThis.__gardenCanvas.beds[0].xCm,50);
 });
 
 test('failed deletion retains the confirmation and reuses the deletion request on retry',async()=>{
@@ -199,12 +199,12 @@ test('default garden planning autosaves bed edits without history and keeps reco
   assert.equal(fixture.historyEvents[0].document.beds[0].areaPlan.areas[0].rowCount,2,'new planning cannot rewrite completed history');
   await click('Back to garden');await click('History');await click('Previous event');
   assert.equal(globalThis.__gardenCanvas.beds[0].areaPlan.areas[0].rowCount,2);
-  await click('Plan');assert.equal(globalThis.__gardenCanvas.beds[0].areaPlan.areas[0].rowCount,3);
+  await click('Current plan');assert.equal(globalThis.__gardenCanvas.beds[0].areaPlan.areas[0].rowCount,3);
 });
 
 
 test('Edit garden keeps layout changes disabled while viewing recorded history',async()=>{
-  await openGarden();await click('History');await click('Previous event');await click('Edit garden');
+  await openGarden();await click('History');await click('Previous event');await click('Garden settings');
   const dialog=document.querySelector('dialog');assert.ok(dialog);
   for(const label of ['Rename garden','Garden size']){
     const action=[...dialog.querySelectorAll('button')].find(item=>item.textContent===label);
@@ -218,10 +218,10 @@ test('Edit garden keeps layout changes disabled while viewing recorded history',
 
 test('garden Recap follows the selected historical beds and returns to the working plan totals',async()=>{
   const old=events()[0];old.document.beds[0]={...bed,widthCm:150,plantingPlan:plan()};
-  await openGarden([old]);await click('History');await click('Previous event');await click('Recap');
+  await openGarden([old]);await click('History');await click('Previous event');await click('Summary');
   assert.match(document.querySelector('dialog').textContent,/Total plants21/);
   assert.match(document.querySelector('dialog').textContent,/Area occupied by beds3 m²/);
-  await click('Close');await click('Plan');await click('Recap');
+  await click('Close');await click('Current plan');await click('Summary');
   assert.match(document.querySelector('dialog').textContent,/Total plants0/);
   assert.match(document.querySelector('dialog').textContent,/Area occupied by beds2 m²/);
   assert.equal(globalThis.__editorFixture.saves.length,0);
@@ -239,19 +239,19 @@ test('backdated garden edits use an independent draft and leave later records an
   assert.equal(fixture.historyEvents.length,4);assert.deepEqual(fixture.historyEvents.find(item=>item.id===later.id),later);
   assert.equal(globalThis.__gardenCanvas.beds[0].xCm,75);assert.equal(globalThis.__gardenCanvas.readOnly,true);
   await click('View completed event: Change 3');assert.equal(globalThis.__gardenCanvas.beds[0].xCm,30);
-  await click('Plan');assert.equal(globalThis.__gardenCanvas.beds[0].xCm,50);
+  await click('Current plan');assert.equal(globalThis.__gardenCanvas.beds[0].xCm,50);
   assert.equal(fixture.saves.length,0);assert.equal(fixture.eventWrites.length,0);
 });
 
 test('existing records can change their historical layout, date, title and notes without changing another event',async()=>{
   await openGarden();const fixture=globalThis.__editorFixture,later=structuredClone(fixture.historyEvents[2]);
   await click('History');await click('View completed event: Change 1');await click('Edit history record');
-  await click('Edit garden');await click('Garden size');await type('garden-width','600');await click('Update garden');
+  await click('Garden settings');await click('Garden size');await type('garden-width','600');await click('Update garden');
   await click('Save history record');await type('history-edit-date',`${month}-09`);await type('history-edit-title','Corrected early layout');await type('history-edit-notes','Measured again');await click('Save record');
   const corrected=fixture.historyEvents.find(item=>item.id==='event-0');
   assert.equal(corrected.eventVersion,2);assert.equal(corrected.date,`${month}-09`);assert.equal(corrected.notes,'Measured again');
   assert.equal(corrected.document.dimensions.widthCm,600);assert.deepEqual(fixture.historyEvents.find(item=>item.id===later.id),later);
-  await click('Plan');assert.equal(globalThis.__gardenCanvas.dimensions.widthCm,500);
+  await click('Current plan');assert.equal(globalThis.__gardenCanvas.dimensions.widthCm,500);
   assert.equal(fixture.saves.length,0);
 });
 
@@ -281,12 +281,12 @@ test('a date before the first record starts an explicit current-plan template wi
   await click('Save history record');await type('history-edit-date','2025-01-01');await click('Save record');
   assert.equal(globalThis.__editorFixture.historyEvents[0].document.beds.find(item=>item.name==='Earlier bed').name,'Earlier bed');
   assert.equal(globalThis.__editorFixture.historyEvents[0].document.beds[0].id,bed.id);
-  await click('Plan');assert.equal(globalThis.__gardenCanvas.beds[0].name,bed.name);
+  await click('Current plan');assert.equal(globalThis.__gardenCanvas.beds[0].name,bed.name);
 });
 
 test('leaving history cancels a late response that would otherwise open a historical draft',async()=>{
   await openGarden();await click('History');let resolve;
   globalThis.__editorFixture.historyEditLoad=()=>new Promise(done=>{resolve=done;});
-  await click('Add past garden edit');await click('Plan');await act(async()=>resolve(events()[0]));
+  await click('Add past garden edit');await click('Current plan');await act(async()=>resolve(events()[0]));
   assert.equal(button('Save history record'),undefined);assert.equal(globalThis.__gardenCanvas.beds[0].xCm,50);
 });

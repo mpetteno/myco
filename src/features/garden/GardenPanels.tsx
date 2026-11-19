@@ -1,3 +1,4 @@
+import { useWorkspaceNavigation } from '../../shared/navigation/WorkspaceNavigation';
 import type { GardenLocation } from '../gardens/gardenLocation';
 import { GardenCalendarGuidance } from '../catalogue-reference/GardenCalendarGuidance';
 import { useI18n } from '../../shared/i18n/I18nProvider';
@@ -28,6 +29,7 @@ type GardenPanelsProps = {
   user: User;
   beforeSignOut: () => Promise<string | null>;
   onChooseGardens: () => void;
+  onHistory?: () => void;
   gardenId: string;
   ownerId: string;
   onEditBed: (id: string) => void;
@@ -35,12 +37,13 @@ type GardenPanelsProps = {
   readOnly?: boolean; historyDraft?: boolean; bedScope?: string;
 };
 
-export function GardenPanels({ panel, onPanelChange, layout, selectedBedId, clipboard, onDelete, user, beforeSignOut, onChooseGardens, gardenId, ownerId, onEditBed, onLocation, location, historyDraft = false, bedScope, readOnly = false }: GardenPanelsProps) {
+export function GardenPanels({ panel, onPanelChange, layout, selectedBedId, clipboard, onDelete, user, beforeSignOut, onChooseGardens, onHistory, gardenId, ownerId, onEditBed, onLocation, location, historyDraft = false, bedScope, readOnly = false }: GardenPanelsProps) {
   const { t } = useI18n();
+  const navigation = useWorkspaceNavigation();
   if (!panel) return null;
   const selected = layout.beds.find((bed) => bed.id === selectedBedId);
   const close = () => onPanelChange(null);
-  const titles = { garden: 'Garden size', 'edit-garden': 'Edit garden', recap: 'Garden recap', beds: `Beds (${layout.beds.length})`, add: 'Add bed', actions: 'Garden tools', help: 'How to use Myco', account: 'Account', rename: 'Garden name', sharing: 'Share garden', calendar: t('location.calendar') };
+  const titles = { garden: 'Garden size', 'edit-garden': 'Garden settings', recap: 'Garden summary', beds: `Beds (${layout.beds.length})`, add: 'Add bed', actions: 'More garden tools', help: 'How to use Myco', account: 'Account', rename: 'Garden name', sharing: 'Share garden', calendar: t('location.calendar') };
 
   return (
     <Sheet key={panel} title={titles[panel]} onClose={close}>
@@ -57,14 +60,25 @@ export function GardenPanels({ panel, onPanelChange, layout, selectedBedId, clip
           return error;
         }} />}
       {panel === 'actions' && (
-        <div className="space-y-3">
-          {!historyDraft && <Button variant="secondary" onClick={onChooseGardens}>Your gardens</Button>}
-          <Button variant="secondary" onClick={() => onPanelChange('calendar')}>{t('location.calendar')}</Button>
-          <Button variant="secondary" onClick={() => onPanelChange('help')}>Help</Button>
-          {!readOnly && !bedScope && <div className="lg:hidden [@media(pointer:coarse)]:block">
-            <BedTouchActions bed={selected} clipboard={clipboard}
+        <div className="space-y-5">
+          <section aria-label="Garden views and settings" className="space-y-2">
+            <h3 className="text-sm font-semibold">Garden</h3>
+            {onHistory && <Button variant="secondary" onClick={onHistory}>History</Button>}
+            {!bedScope && <Button variant="secondary" onClick={() => onPanelChange('edit-garden')}>Garden settings</Button>}
+            {selected && !readOnly && <Button variant="secondary" onClick={() => onPanelChange('recap')}>Summary</Button>}
+            {!navigation && <Button variant="secondary" onClick={() => onPanelChange('calendar')}>{t('location.calendar')}</Button>}
+          </section>
+          {!readOnly && !bedScope && <section aria-label="Bed actions" className="space-y-2 border-t border-stone-200 pt-4 dark:border-stone-700">
+            <h3 className="text-sm font-semibold">Bed actions</h3>
+            <BedTouchActions hideEdit bed={selected} clipboard={clipboard}
               onEdit={() => { if (selected) onEditBed(selected.id); }} onDelete={onDelete} onClose={close} />
-          </div>}
+          </section>}
+          <section aria-label="Workspace" className="space-y-2 border-t border-stone-200 pt-4 dark:border-stone-700">
+            <h3 className="text-sm font-semibold">Workspace</h3>
+            {!navigation && !historyDraft && <Button variant="secondary" onClick={onChooseGardens}>Your gardens</Button>}
+            {!historyDraft && <Button variant="secondary" onClick={() => onPanelChange('account')}>Account</Button>}
+            <Button variant="secondary" onClick={() => onPanelChange('help')}>Help</Button>
+          </section>
         </div>
       )}
       {panel === 'edit-garden' && <div className="space-y-3">

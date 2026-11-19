@@ -50,3 +50,33 @@ test('manual region locations allow an optional trimmed city and retain legacy c
     { ...region, displayName: ' ' }, { ...location, regionCode: 'IT-82' }, { ...location, latitude: NaN }, { ...location, longitude: 190 },
     { ...location, countryCode: 'FR' }, { ...location, enteredLocation: '' }]) assert.equal(model.validGardenLocation(value), false);
 });
+
+test('linked lists deduplicate inherited targets using the most specific relationship',()=>{
+  const data={plant_types:[{id:'crop',family_id:'family',name:'Crop'}],plant_cultivars:[{id:'variety',plant_type_id:'crop',name:'Variety'}],plant_guidance:[],plant_depths:[],calendar_profiles:[],
+    rotation_rules:[{id:'broad',version:1,current_family_id:'family',previous_plant_id:'other',relationship:'avoid_after',notes:''},{id:'specific',version:1,current_plant_id:'crop',previous_plant_id:'other',relationship:'favourable_after',notes:''}]};
+  const catalogue={rules:[{id:'broad',version:1,first:{kind:'family',id:'family'},second:{kind:'plant',id:'other'},relationship:'caution',notes:''},{id:'specific',version:1,first:{kind:'plant',id:'crop'},second:{kind:'plant',id:'other'},relationship:'companion',notes:''}]};
+  const draft=model.createCropDraft(data,catalogue,'crop','variety');
+  assert.equal(draft.rows.filter(row=>row.table==='companion_rules').length,1);
+  assert.equal(draft.rows.find(row=>row.table==='companion_rules').values.relationship,'companion');
+  assert.equal(draft.rows.filter(row=>row.table==='rotation_rules').length,1);
+  assert.equal(draft.rows.find(row=>row.table==='rotation_rules').values.relationship,'favourable_after');
+  const moved=model.linkCropRelationship(draft,draft,'companion_rules','plant:other','caution');
+  const changes=model.cropChanges(moved,draft,'crop','variety');
+  assert.equal(changes.length,1);assert.equal(changes[0].id,null);assert.equal(changes[0].source_id,'specific');
+  assert.equal(changes[0].details.cultivar_a_id,'variety');
+  assert.deepEqual(model.linkCropRelationship(moved,draft,'companion_rules','plant:other','companion'),draft);
+  assert.deepEqual(model.removeCropRelationship(moved,draft,moved.rows.find(row=>row.table==='companion_rules').key),draft);
+});
+
+test('calendar normalization preserves every month for every pair of month ranges', () => {
+  for(let a=1;a<=12;a++) for(let b=1;b<=12;b++) for(let c=1;c<=12;c++) for(let d=1;d<=12;d++) {
+    const input=[{start_month:a,end_month:b},{start_month:c,end_month:d}];
+    const output=model.normalizeWindows(input);
+    assert.deepEqual(model.normalizeWindows(output),output);
+    for(let month=1;month<=12;month++) assert.equal(output.some(w=>model.monthInWindow(month,w.start_month,w.end_month)),input.some(w=>model.monthInWindow(month,w.start_month,w.end_month)));
+  }
+  assert.deepEqual(model.normalizeWindows([]),[]);
+  assert.throws(()=>model.normalizeWindows([{start_month:0,end_month:3}]));
+  assert.equal(model.calendarNote('Feb-Mar',[{start_month:2,end_month:3}]),'');
+  assert.equal(model.calendarNote('Feb-Mar (from crowns)',[{start_month:2,end_month:3}]),'Feb-Mar (from crowns)');
+});

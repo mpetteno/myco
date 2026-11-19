@@ -1,3 +1,4 @@
+import { useScopedId } from './FieldScope';
 import type { ComponentProps } from 'react';
 
 type TextFieldProps = ComponentProps<'input'> & {
@@ -6,6 +7,7 @@ type TextFieldProps = ComponentProps<'input'> & {
 };
 
 export function TextField({ id, label, type = 'text', ...props }: TextFieldProps) {
+  id = useScopedId(id);
   return (
     <label htmlFor={id} className="block space-y-2 text-sm font-medium">
       <span>{label}</span>

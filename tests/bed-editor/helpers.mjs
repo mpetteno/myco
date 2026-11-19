@@ -9,6 +9,13 @@ const directory = mkdtempSync(resolve('node_modules/.tmp/myco-editor-'));
 const catalogue = join(directory, 'catalogue.mjs');
 const mulch = join(directory, 'mulch.mjs');
 const mixtures = join(directory, 'mixtures.mjs');
+const references = join(directory, 'references.mjs');
+writeFileSync(references, `export const saveReference = async () => { throw Error('Unexpected reference write'); };
+export const removeCultivar = async () => { throw Error('Unexpected cultivar removal'); };
+export const loadReferenceData = async () => {
+  if (globalThis.__editorFixture.referenceLoad) return globalThis.__editorFixture.referenceLoad();
+  return globalThis.__editorFixture.references ?? { plant_cultivars: [], plant_guidance: [], plant_depths: [], calendar_profiles: [], calendar_coverage: [], plant_calendar_entries: [], rotation_rules: [], mulch_categories: [], plant_types: [], plant_families: [], calendar_windows: [], isAdmin: false };
+};`);
 writeFileSync(mixtures, 'export const loadSeedMixtures = async () => globalThis.__editorFixture.seedMixtures ?? [];');
 const repository = join(directory, 'repository.mjs');
 const canvas = join(directory, 'canvas.mjs');
@@ -40,7 +47,13 @@ writeFileSync(canvas, `import { createElement } from 'react';
 writeFileSync(gardenCanvas, `import { createElement } from 'react';
   export const GardenCanvas = (props) => { globalThis.__gardenCanvas = props;
     return createElement('button', { disabled: !props.beds.length, onClick: () => props.onSelectBed(props.beds[0].id) }, 'Select fixture bed'); };`);
-writeFileSync(history, `export const historyError = (error) => error instanceof Error ? error : new Error('History unavailable');
+writeFileSync(history, `export const loadSuggestionHistory = async () => {
+    const fixture = globalThis.__editorFixture;
+    fixture.suggestionReads = (fixture.suggestionReads ?? 0) + 1;
+    if (fixture.suggestionHistoryLoad) return fixture.suggestionHistoryLoad();
+    return structuredClone(fixture.historyEvents ?? []);
+  };
+  export const historyError = (error) => error instanceof Error ? error : new Error('History unavailable');
   export const listGardenEvents = async () => globalThis.__editorFixture.historyEvents ?? [];
   export const loadGardenEvent = async (gardenId, id) => {
     if (globalThis.__editorFixture.historyLoad) return globalThis.__editorFixture.historyLoad(id);
@@ -98,6 +111,7 @@ writeFileSync(konva, `import { createElement } from 'react';
 export async function loadEditor() {
   const result = await build({ configFile: false, envFile: false, logLevel: 'silent',
     plugins: [{ name: 'editor-fixtures', enforce: 'pre', resolveId(source) {
+      if (source.endsWith('/referenceRepository')) return references;
       if (source.endsWith('/catalogueRepository')) return catalogue;
       if (source.endsWith('/mulchCatalogueRepository')) return mulch;
       if (source.endsWith('/seedMixtureRepository')) return mixtures;

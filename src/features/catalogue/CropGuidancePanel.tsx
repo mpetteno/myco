@@ -1,3 +1,6 @@
+import { useScopedId, useFieldPrefix } from '../../shared/ui/FieldScope';
+import { useFormLeave, useWorkspaceNavigation } from '../../shared/navigation/WorkspaceNavigation';
+import { MonthField } from '../catalogue-reference/MonthField';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '../../shared/ui/Button';
@@ -11,13 +14,15 @@ import type { ReferenceData, Field } from '../catalogue-reference/referenceModel
 import { referenceText } from '../catalogue-reference/referenceText';
 import { loadCatalogue } from './catalogueRepository';
 import { catalogueError } from './catalogueErrors';
+import { RelationshipLists } from './RelationshipLists';
 import { createCropDraft } from './cropEditor';
-import type { CropDraft, EditorRow, EditorTable } from './cropEditor';
+import type { CropDraft, EditorRow } from './cropEditor';
 import { saveCropEditor } from './cropEditorRepository';
 import type { Catalogue } from './catalogue';
 
 type Props = { userId: string; cropId: string; cultivarId?: string; name: string; onBack: () => void; onEditingChange?: (editing: boolean) => void };
 function Section({ id, title, description, children }: { id: string; title: string; description?: string; children: ReactNode }) {
+  id = useScopedId(id);
   return <section aria-labelledby={id} className="space-y-4 rounded-xl border border-stone-200 bg-white p-4 sm:p-5 dark:border-stone-800 dark:bg-stone-900">
     <div><h4 id={id} className="font-semibold">{title}</h4>{description && <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">{description}</p>}</div>
     {children}
@@ -26,6 +31,7 @@ function Section({ id, title, description, children }: { id: string; title: stri
 
 export function CropGuidancePanel({ userId, cropId, cultivarId, name, onBack, onEditingChange }: Props) {
   const { t } = useI18n();
+  const fieldPrefix = useFieldPrefix();
   const text = (value: string) => referenceText(t, value);
   const [loaded, setLoaded] = useState<{ data: ReferenceData; catalogue: Catalogue; initial: CropDraft }>();
   const [draft, setDraft] = useState<CropDraft>();
@@ -35,6 +41,8 @@ export function CropGuidancePanel({ userId, cropId, cultivarId, name, onBack, on
   const [message, setMessage] = useState('');
   const busy = useRef(false);
   const dirty = !!draft && !!loaded && JSON.stringify(draft) !== JSON.stringify(loaded.initial);
+  const navigation = useWorkspaceNavigation();
+  const formRef = useFormLeave(dirty, pending, submit, () => { if (loaded) setDraft(structuredClone(loaded.initial)); });
   useEffect(() => { onEditingChange?.(dirty || pending); return () => onEditingChange?.(false); }, [dirty, pending, onEditingChange]);
   useEffect(() => {
     if (!dirty) return;
@@ -67,20 +75,19 @@ export function CropGuidancePanel({ userId, cropId, cultivarId, name, onBack, on
   function changeDetails(key: string, value: string) { setMessage(''); setDraft((current) => current && ({ ...current, details: { ...current.details, [key]: value } })); }
   function changeRow(key: string, values: Partial<EditorRow>) { setMessage(''); setDraft((current) => current && ({ ...current, rows: current.rows.map((row) => row.key === key ? { ...row, ...values } : row) })); }
   function valueChanged(row: EditorRow, key: string, value: string) { changeRow(row.key, { values: { ...row.values, [key]: value } }); }
-  function add(table: EditorTable) {
-    const values: Record<string, string> = table === 'plant_calendar_entries' ? { calendar_profile_id: data.calendar_profiles[0]?.id ?? '', activity: 'direct_sowing', planting_method: 'seed', notes: '' }
-      : { target: '', relationship: table === 'companion_rules' ? 'companion' : 'avoid_after', notes: '' };
-    setMessage(''); setDraft((current) => current && ({ ...current, rows: [...current.rows, { key: crypto.randomUUID(), table, values, inherited: false, removed: false, windows: [] }] }));
+  function addCalendarActivity() {
+    const values = { calendar_profile_id: data.calendar_profiles[0]?.id ?? '', activity: 'direct_sowing', planting_method: 'seed', notes: '' };
+    setMessage(''); setDraft((current) => current && ({ ...current, rows: [...current.rows, { key: crypto.randomUUID(), table: 'plant_calendar_entries', values, inherited: false, removed: false, windows: [] }] }));
   }
   function remove(row: EditorRow) {
     if (row.original) changeRow(row.key, { removed: true });
     else setDraft((current) => current && ({ ...current, rows: current.rows.filter((item) => item.key !== row.key) }));
   }
   function field(spec: Field, values: Record<string, string>, change: (key: string, value: string) => void, prefix: string, inherited?: unknown) {
-    const props = { id: `${prefix}-${spec.key}`, label: text(spec.label), value: values[spec.key] ?? '', required: spec.required, disabled: !admin || pending };
+    const props = { id: `${fieldPrefix}${prefix}-${spec.key}`, label: text(spec.label), value: values[spec.key] ?? '', required: spec.required, disabled: !admin || pending };
     const inheritedLabel = inherited == null ? text('Unknown') : typeof inherited === 'boolean' ? text(inherited ? 'Yes' : 'No') : text(String(inherited));
     const emptyLabel = cultivarId ? `${t('catalogue.useCrop')}: ${inheritedLabel}` : text('Unknown');
-    let choices = spec.choices?.map((value) => ({ value, label: value === 'companion' ? t('catalogue.companionSuggestion') : value === 'caution' ? t('catalogue.caution') : text(value) }));
+    let choices = spec.choices?.map((value) => ({ value, label: text(value) }));
     if (spec.reference) choices = data[spec.reference].map((row) => ({ value: row.id, label: String(row.name) }));
     if (spec.type === 'boolean') choices = [{ value: 'true', label: text('Yes') }, { value: 'false', label: text('No') }];
     if (choices) return <SelectField key={spec.key} {...props} onChange={(e) => change(spec.key, e.target.value)}>
@@ -106,7 +113,7 @@ export function CropGuidancePanel({ userId, cropId, cultivarId, name, onBack, on
     busy.current = true; setPending(true); setError(''); setMessage('');
     try {
       await saveCropEditor(cropId, cultivarId, owner.version, crop.version, draft!, initial);
-      setMessage(t('catalogue.savedAll')); setAttempt((value) => value + 1);
+      setMessage(t('catalogue.savedAll')); setAttempt((value) => value + 1); return true;
     } catch (problem) { setError(catalogueError(problem).message); }
     finally { busy.current = false; setPending(false); }
   }
@@ -118,24 +125,12 @@ export function CropGuidancePanel({ userId, cropId, cultivarId, name, onBack, on
     </div>;
   }
   function relationships(table: 'companion_rules' | 'rotation_rules') {
-    const rows = draft!.rows.filter((row) => row.table === table);
-    return <div className="space-y-4">{rows.map((row, index) => row.removed ? <div key={row.key} className="flex items-center justify-between gap-3 rounded-lg bg-stone-50 p-3 text-sm dark:bg-stone-950"><span>{t('catalogue.willRemove')}</span><button type="button" disabled={pending} className="min-h-10 cursor-pointer underline" onClick={() => changeRow(row.key, { removed: false })}>{t('catalogue.undo')}</button></div>
-      : <div key={row.key} className="space-y-3 rounded-lg border border-stone-200 p-3 dark:border-stone-700">
-        {rowHeader(row, `${table === 'companion_rules' ? t('catalogue.companions') : text('Rotation rules')} ${index + 1}`)}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <SelectField id={`${row.key}-target`} label={table === 'companion_rules' ? t('catalogue.companionTarget') : t('catalogue.previousTarget')} value={row.values.target} required disabled={!admin || pending} onChange={(e) => valueChanged(row, 'target', e.target.value)}>
-            <option value="">{text('Choose')}</option>{targetChoices.map((target) => <option key={target.value} value={target.value}>{target.label}</option>)}
-          </SelectField>
-          {field({ key: 'relationship', label: 'Relationship', required: true, choices: table === 'companion_rules' ? ['companion', 'caution'] : ['favourable_after', 'avoid_after'] }, row.values, (key, value) => valueChanged(row, key, value), row.key)}
-          {field({ key: 'notes', label: 'Notes' }, row.values, (key, value) => valueChanged(row, key, value), row.key)}
-        </div>
-      </div>)}{!rows.length && <p className="text-sm text-stone-500">{t('catalogue.noEntries')}</p>}
-      {admin && <Button type="button" variant="secondary" disabled={pending} onClick={() => add(table)}>{table === 'companion_rules' ? t('catalogue.addCompanion') : t('catalogue.addRotation')}</Button>}
-    </div>;
+    return <RelationshipLists table={table} draft={draft!} initial={initial} targets={targetChoices} editable={admin} pending={pending}
+      onChange={(next) => { setMessage(''); setDraft(next); }} />;
   }
-  return <form onSubmit={submit} className="space-y-5 pb-3">
+  return <form ref={formRef} onSubmit={submit} className="space-y-5 pb-3">
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <button type="button" disabled={dirty || pending} className="min-h-11 cursor-pointer text-sm text-stone-600 underline underline-offset-4 disabled:cursor-default disabled:opacity-40 dark:text-stone-300" onClick={onBack}>← {t('catalogue.cancel')}</button>
+      <button type="button" disabled={pending} className="min-h-11 cursor-pointer text-sm text-stone-600 underline underline-offset-4 disabled:cursor-default disabled:opacity-40 dark:text-stone-300" onClick={() => navigation ? navigation.request(onBack) : onBack()}>← {t('catalogue.cancel')}</button>
       <span className="text-xs text-stone-500">{cultivarId ? `${text('Cultivar')} · ${crop.name}` : `${text('Crop')} · ${family?.name ?? ''}`}</span>
     </div>
     <div><h3 className="text-2xl font-semibold tracking-tight">{String(owner.name ?? name)}</h3><p className="mt-1 text-sm text-stone-500 dark:text-stone-400">{admin ? t('catalogue.editPageHint') : t('catalogue.readPageHint')}</p></div>
@@ -163,12 +158,12 @@ export function CropGuidancePanel({ userId, cropId, cultivarId, name, onBack, on
         : <div key={row.key} className="space-y-3 rounded-lg border border-stone-200 p-3 dark:border-stone-700">{rowHeader(row, `${text('Activity')} ${index + 1}`)}
           <div className="grid gap-3 sm:grid-cols-2">{referenceSections.plant_calendar_entries.fields.filter((spec) => !['plant_type_id', 'cultivar_id'].includes(spec.key)).map((spec) => field(spec, row.values, (key, value) => valueChanged(row, key, value), row.key))}</div>
           <div className="space-y-2"><p className="text-sm font-medium">{t('catalogue.monthWindows')}</p>{row.windows.map((window, i) => <div key={i} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
-            {(['start_month', 'end_month'] as const).map((key) => <NumberField unit="" key={key} id={`${row.key}-window-${i}-${key}`} label={t(key === 'start_month' ? 'catalogue.startMonth' : 'catalogue.endMonth')} min={1} max={12} step={1} required value={window[key]} disabled={!admin || pending} onChange={(e) => changeRow(row.key, { windows: row.windows.map((item, j) => j === i ? { ...item, [key]: Number(e.target.value) } : item) })} />)}
+            {(['start_month', 'end_month'] as const).map((key) => <MonthField key={key} id={`${row.key}-window-${i}-${key}`} label={t(key === 'start_month' ? 'catalogue.startMonth' : 'catalogue.endMonth')} required value={window[key]} disabled={!admin || pending} onChange={(e) => changeRow(row.key, { windows: row.windows.map((item, j) => j === i ? { ...item, [key]: Number(e.target.value) } : item) })} />)}
             {admin && <button type="button" className="min-h-12 cursor-pointer px-2 text-sm text-red-700 dark:text-red-400" disabled={pending} aria-label={t('catalogue.removeWindow')} onClick={() => changeRow(row.key, { windows: row.windows.filter((_, j) => j !== i) })}>×</button>}
           </div>)}{admin && <button type="button" className="min-h-10 cursor-pointer text-sm text-green-800 underline dark:text-green-400" disabled={pending || row.windows.length >= 24} onClick={() => changeRow(row.key, { windows: [...row.windows, { start_month: 1, end_month: 1 }] })}>+ {t('catalogue.addWindow')}</button>}</div>
         </div>)}
         {!draft.rows.some((row) => row.table === 'plant_calendar_entries') && <p className="text-sm text-stone-500">{t('catalogue.noEntries')}</p>}
-        {admin && <Button type="button" variant="secondary" disabled={pending} onClick={() => add('plant_calendar_entries')}>{t('catalogue.addCalendarActivity')}</Button>}
+        {admin && <Button type="button" variant="secondary" disabled={pending} onClick={addCalendarActivity}>{t('catalogue.addCalendarActivity')}</Button>}
       </div>
     </Section>
     {admin && <div className="sticky bottom-0 z-10 -mx-1 space-y-2 rounded-xl border border-stone-200 bg-white p-3 shadow-lg dark:border-stone-700 dark:bg-stone-900">

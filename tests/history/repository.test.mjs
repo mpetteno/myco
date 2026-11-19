@@ -22,6 +22,48 @@ function fixture(handler) {
   return requests;
 }
 
+test('suggestion snapshots are bulk-paginated, ordered chronologically and use frozen display states', async () => {
+  const requests = fixture(({ url }) => {
+    if (url.pathname.endsWith('gardens')) return { data: [{ id: 'garden-a' }] };
+    return { data: url.searchParams.get('event_order') === 'gt.0'
+      ? Array.from({ length: 200 }, (_, i) => ({ ...row, id: `event-${i}`, event_order: i + 1, display_snapshot: { ...document, name: `Frozen ${i}` } }))
+      : [{ ...row, id: 'backdated', event_order: 201, event_date: '2026-01-01', display_snapshot: { ...document, name: 'Backdated' } }] };
+  });
+  const result = await repository.loadSuggestionHistory('garden-a');
+  assert.equal(result.length, 201); assert.equal(result[0].document.name, 'Backdated');
+  assert.equal(result.at(-1).document.name, 'Frozen 199');
+  assert.equal(requests.length, 3, 'one authorization read plus bulk pages, no request per event');
+  assert.equal(requests[2].url.searchParams.get('event_order'), 'gt.200');
+  for (const request of requests.slice(1)) {
+    assert.equal(request.method, 'GET');
+    assert.equal(request.url.searchParams.get('garden_id'), 'eq.garden-a');
+    assert.equal(request.url.searchParams.get('deleted_at'), 'is.null');
+  }
+});
+
+test('suggestion snapshots reconstruct legacy bed scope without recording unrelated proposals', async () => {
+  const bed = { id: 'bed-a', name: 'Bed A', xCm: 0, yCm: 0, widthCm: 100, lengthCm: 100 };
+  const other = { ...bed, id: 'bed-b', name: 'Bed B', xCm: 200 };
+  fixture(({ url }) => ({ data: url.pathname.endsWith('gardens') ? [{ id: 'garden-a' }] : [
+    { ...row, id: 'base', snapshot: { ...document, beds: [bed, other] } },
+    { ...row, id: 'scoped', event_order: 2, event_kind: 'bed', bed_id: bed.id,
+      snapshot: { ...document, beds: [{ ...bed, name: 'Confirmed' }, { ...other, name: 'Unrecorded proposal' }] } },
+  ] }));
+  const result = await repository.loadSuggestionHistory('garden-a');
+  assert.equal(result[1].document.beds.find((b) => b.id === 'bed-a').name, 'Confirmed');
+  assert.equal(result[1].document.beds.find((b) => b.id === 'bed-b').name, 'Bed B');
+  assert.equal(result[0].document.beds[0].name, 'Bed A');
+});
+
+test('suggestion history rejects revoked access and partial page failures', async () => {
+  let requests = fixture(() => ({ data: [] }));
+  await assert.rejects(repository.loadSuggestionHistory('garden-a'), /access|available/);
+  assert.equal(requests.length, 1);
+  requests = fixture(({ url }) => url.pathname.endsWith('gardens') ? { data: [{ id: 'garden-a' }] } : { data: { code: '42501' }, status: 403 });
+  await assert.rejects(repository.loadSuggestionHistory('garden-a'), /access|available/);
+  assert.equal(requests.length, 2);
+});
+
 test('loads paginated event metadata with stable cursors and orders backdated events by date then recording order', async () => {
   const requests = fixture(({ url }) => {
     if (url.pathname.endsWith('gardens')) return { data: [{ id: 'garden-a' }] };
