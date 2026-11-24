@@ -32,7 +32,7 @@ export function AreaFields({ bed, editor }: { bed: Bed; editor: ReturnType<typeo
         {savedMixture.id && !draft.mixtures.some((mixture) => mixture.id === savedMixture.id) && <option value={savedMixture.id}>{savedMixture.name} (saved reference)</option>}
         {draft.mixtures.map((mixture) => <option key={mixture.id} value={mixture.id}>{mixture.name}</option>)}
       </SelectField>}
-      {savedMixture && !draft.loading && !draft.mixtures.length && <p role="alert" className="text-sm text-red-700 dark:text-red-400">No seed mixtures are available.</p>}
+      {savedMixture && !savedMixture.id && !draft.loading && !draft.mixtures.length && <p role="alert" className="text-sm text-red-700 dark:text-red-400">No seed mixtures are available.</p>}
       <NumberField id="broadcast-density" label="Sowing density" unit="g/m²" min={0.000001} max={1000000} step="any" required value={area.density || ''} onChange={(event) => draft.updateArea(area.id, { density: Number(event.target.value) })} />
       {quantity && <div className="space-y-3">
         <NumberField id="broadcast-total" label="Total seed required" unit="g" readOnly value={number(quantity.total)} />

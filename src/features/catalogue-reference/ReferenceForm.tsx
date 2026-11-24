@@ -1,5 +1,6 @@
+import { CatalogueBack } from '../catalogue/CatalogueBack';
 import { MonthField } from './MonthField';
-import { useFormLeave, useGuardedBack } from '../../shared/navigation/WorkspaceNavigation';
+import { useFormLeave } from '../../shared/navigation/WorkspaceNavigation';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Button } from '../../shared/ui/Button';
@@ -13,7 +14,7 @@ import { saveReference } from './referenceRepository';
 import { referenceSections } from './referenceModel';
 import type { Field, ReferenceData, ReferenceRow, ReferenceTable } from './referenceModel';
 
-export function ReferenceForm({ table, data, current, initial, fixedValues = {}, cancelLabel, onCancel, onSaved }: { table: ReferenceTable; data: ReferenceData; current?: ReferenceRow; initial?: ReferenceRow; fixedValues?: Record<string, string>; cancelLabel?: string; onCancel: () => void; onSaved: () => void }) {
+export function ReferenceForm({ table, data, current, initial, fixedValues = {}, cancelLabel, onCancel, onSaved }: { table: ReferenceTable; data: ReferenceData; current?: ReferenceRow; initial?: ReferenceRow; fixedValues?: Record<string, string>; cancelLabel?: string; onCancel: () => void; onSaved: (row: ReferenceRow) => void }) {
   const { t } = useI18n();
   const text = (value: string) => referenceText(t, value);
   const spec = referenceSections[table];
@@ -29,8 +30,9 @@ export function ReferenceForm({ table, data, current, initial, fixedValues = {},
   const [windows, setWindows] = useState(() => data.calendar_windows.filter((row) => row.calendar_entry_id === (current ?? initial)?.id).map((row) => ({ start_month: Number(row.start_month), end_month: Number(row.end_month) })));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const guardedBack = useGuardedBack(onCancel);
-  const [originalFields] = useState(() => JSON.stringify([values,windows]));
+  const [savedEntry, setSavedEntry] = useState(current);
+  const [message, setMessage] = useState('');
+  const [originalFields, setOriginalFields] = useState(() => JSON.stringify([values,windows]));
   const formRef = useFormLeave(JSON.stringify([values,windows]) !== originalFields, pending, submit, onCancel);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -49,8 +51,9 @@ export function ReferenceForm({ table, data, current, initial, fixedValues = {},
         } else payload[field.key] = value === '' ? (['notes', 'name'].includes(field.key) ? '' : null)
           : field.type === 'number' ? Number(value) : field.type === 'boolean' ? value === 'true' : value;
       }
-      await saveReference(table, payload, current, windows);
-      onSaved(); return true;
+      const saved = await saveReference(table, payload, savedEntry, windows);
+      setSavedEntry(saved); setOriginalFields(JSON.stringify([values,windows])); setMessage('Catalogue saved.');
+      onSaved(saved); return true;
     } catch (e) { setError(catalogueError(e).message); }
     finally { setPending(false); }
   }
@@ -58,8 +61,9 @@ export function ReferenceForm({ table, data, current, initial, fixedValues = {},
     setValues((previous) => ({ ...previous, [field.key]: value, ...(field.key === 'plant_type_id' && 'cultivar_id' in previous ? { cultivar_id: '' } : {}) }));
   }
   return <form ref={formRef} className="space-y-3" onSubmit={submit}>
+    <CatalogueBack onBack={onCancel} disabled={pending} label={cancelLabel} />
     <h3 className="font-semibold">{text(spec.label)}</h3>
-    <p className="text-sm">{t('catalogue.inheritance')}</p>
+    {['plant_cultivars', 'plant_guidance', 'plant_depths', 'plant_calendar_entries'].includes(table) && <p className="text-sm">{t('catalogue.inheritance')}</p>}
     {spec.fields.filter((field) => !(field.key in fixedValues)).map((field) => {
       const props = { id: `reference-${field.key}`, label: text(field.label), value: values[field.key], required: field.required, disabled: pending };
       let choices = field.choices?.map((value) => ({ value, label: text(value) }));
@@ -79,7 +83,7 @@ export function ReferenceForm({ table, data, current, initial, fixedValues = {},
       <p className="text-sm">{t('catalogue.noWindows')}</p>
     </fieldset>}
     <p role="alert">{error}</p>
+    <p role="status" className="text-sm empty:hidden">{message}</p>
     <Button type="submit" disabled={pending}>{t('catalogue.save')}</Button>
-    <Button type="button" variant="secondary" disabled={pending} onClick={guardedBack}>{cancelLabel ?? t('catalogue.cancel')}</Button>
   </form>;
 }

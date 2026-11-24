@@ -4,7 +4,7 @@ import type { HistoryDraft } from './historyDraft';
 import { historyDocument } from './historyDraft';
 import { useEffect, useRef, useState } from 'react';
 import type { SavedGarden } from '../gardens/gardenDocument';
-import { dayKey, eventNeighbours, eventOnDate, compareEvents } from './gardenHistory';
+import { dayKey, eventOnDate, compareEvents } from './gardenHistory';
 import type { GardenEvent, GardenEventDetails, GardenEventSnapshot } from './gardenHistory';
 import { historyError, listGardenEvents, loadGardenEvent, recordGardenEvent } from './historyRepository';
 import { GardenStorageError } from '../gardens/gardenErrors';
@@ -13,7 +13,7 @@ import type { ActivityDetails } from '../activities/activities';
 
 export function useGardenHistory(gardenId: string, beforeViewing: () => Promise<string | null>, getCurrent: () => SavedGarden, bedId?: string) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false), [inspector, setInspector] = useState(false), [recording, setRecording] = useState(false);
+  const [open, setOpen] = useState(false), [recording, setRecording] = useState(false);
   const [events, setEvents] = useState<GardenEvent[]>([]), [date, setDate] = useState(dayKey);
   const [current, setCurrent] = useState(true), [selected, setSelected] = useState<GardenEventSnapshot | null>(null);
   const [loading, setLoading] = useState(false), [saving, setSaving] = useState(false), [error, setError] = useState('');
@@ -24,7 +24,6 @@ export function useGardenHistory(gardenId: string, beforeViewing: () => Promise<
   const scoped = (items: GardenEvent[]) => bedId ? items.filter((event) => event.status !== 'planned' && (!event.bedId || event.bedId === bedId)) : items.filter((event) => event.status !== 'planned');
   const request = useRef(0), alive = useRef(true), busy = useRef(false);
   useEffect(() => { alive.current = true; return () => { alive.current = false; request.current++; }; }, []);
-  const neighbours = eventNeighbours(events, selected?.id ?? null, date, current);
   async function refresh() {
     const token = ++request.current;
     setLoading(true); setError('');
@@ -37,7 +36,7 @@ export function useGardenHistory(gardenId: string, beforeViewing: () => Promise<
     finally { if (alive.current && token === request.current) setLoading(false); }
   }
   async function show() {
-    setOpen(true); setInspector(true); setRecording(false); setActivityForm(false); await refresh();
+    setOpen(true); setRecording(false); setActivityForm(false); await refresh();
   }
   async function select(event: GardenEvent | null, chosenDate = event?.date || date) {
     const token = ++request.current;
@@ -50,7 +49,7 @@ export function useGardenHistory(gardenId: string, beforeViewing: () => Promise<
     } catch (problem) { if (alive.current && token === request.current) setError(historyError(problem).message); }
     finally { if (alive.current && token === request.current) setLoading(false); }
   }
-  function today() { request.current++; setDeleting(null); setCurrent(true); setSelected(null); setDate(dayKey()); setLoading(false); setError(''); setRecording(false); setActivityForm(false); }
+  function returnToPlan() { request.current++; setDeleting(null); setCurrent(true); setSelected(null); setLoading(false); setError(''); setRecording(false); setActivityForm(false); }
   async function commitActivity(details: ActivityDetails, id: string) {
     if (busy.current) return;
     busy.current = true; setSaving(true);
@@ -61,7 +60,7 @@ export function useGardenHistory(gardenId: string, beforeViewing: () => Promise<
       await recordCompletedActivity(gardenId, latest.version, details, id);
       const items = await listGardenEvents(gardenId);
       if (!alive.current) return;
-      setEvents(scoped(items)); today(); setMessage(t('record.bedSaved'));
+      setEvents(scoped(items)); returnToPlan(); setMessage(t('record.bedSaved'));
     } finally { busy.current = false; if (alive.current) setSaving(false); }
   }
   async function removeHistoryEntry() {
@@ -133,8 +132,8 @@ export function useGardenHistory(gardenId: string, beforeViewing: () => Promise<
     setSelected(event); setDate(event.date); setCurrent(false); setEditingHistory(null);
     setMessage('History record saved. Later records and the current plan are unchanged.');
   }
-  return { open, inspector, setInspector, recording, setRecording, events, date, current, selected, loading, saving, error, message,
+  return { open, recording, setRecording, events, date, current, selected, loading, saving, error, message,
     bedId, getCurrent, editingHistory, startHistoryEdit, reloadHistoryEdit, historyEdited, closeHistoryEdit: () => setEditingHistory(null), activityForm, setActivityForm, commitActivity, deleting, setDeleting, removeHistoryEntry,
-    neighbours, show, refresh, select, selectDate: (value: string) => select(eventOnDate(events, value), value), today, save,
-    close: () => { today(); setOpen(false); setInspector(false); } };
+    show, refresh, select, selectDate: (value: string) => select(eventOnDate(events, value), value), returnToPlan, save,
+    close: () => { returnToPlan(); setDate(dayKey()); setOpen(false); } };
 }

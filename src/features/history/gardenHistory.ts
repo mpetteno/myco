@@ -25,12 +25,3 @@ export function validateEventDetails(details: GardenEventDetails, t: Translator 
 }
 export const compareEvents = (a: GardenEvent, b: GardenEvent) => a.date.localeCompare(b.date) || a.order - b.order;
 export const eventOnDate = (events: GardenEvent[], date: string) => events.filter((event) => event.status !== 'planned' && event.date <= date).at(-1) ?? null;
-
-export function eventNeighbours(events: GardenEvent[], eventId: string | null, date: string, current: boolean) {
-  events = events.filter((event) => !!event.date);
-  const index = eventId ? events.findIndex((event) => event.id === eventId) : -1;
-  if (current) return { previous: events.at(-1) ?? null, next: null };
-  if (index >= 0) return { previous: events[index].date < date ? events[index] : events[index - 1] ?? null, next: events[index + 1] ?? null };
-  return { previous: events.filter((event) => event.date <= date).at(-1) ?? null,
-    next: events.find((event) => event.date > date) ?? null };
-}

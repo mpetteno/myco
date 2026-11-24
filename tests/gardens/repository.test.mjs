@@ -99,3 +99,13 @@ test('sharing reports missing accounts, owner-only access and unavailable migrat
   await assert.rejects(repository.listGardenMembers(row.id), /not available yet/);
   await assert.rejects(repository.shareGarden(row.id, 'owner@example.test'), /owner already has access/);
 });
+
+test('garden deletion uses the owner-only revision-checked RPC and reports permission and conflict failures', async () => {
+  const current={...document,id:row.id,ownerId:row.owner_id,version:7,updatedAt:row.updated_at};
+  const requests=fixture([{data:null},{data:{code:'40001'},status:409},{data:{code:'42501'},status:403}]);
+  await repository.deleteGarden(current);
+  assert.equal(requests[0].method,'POST');assert.ok(requests[0].url.pathname.endsWith('/rpc/delete_garden'));
+  assert.deepEqual(requests[0].body,{p_garden_id:row.id,p_expected_version:7});
+  await assert.rejects(repository.deleteGarden(current),error=>error.conflict===true&&/Reload/.test(error.message));
+  await assert.rejects(repository.deleteGarden(current),/Only the garden owner/);
+});

@@ -167,3 +167,72 @@ test('retained living mulch and mixture components participate in companion chec
   const result = suggest(input({ catalogue, mixtures }));
   assert.ok(codes(result.candidates.find((c) => c.category === 'green_manure')).includes('suggestions.companionCaution'));
 });
+
+test('same-family rotation is an automatic fallback for crops and cultivars, with no stored-rule mutation', () => {
+  const current = { ...plant(), cultivarId: 'current-variety' }, previous = { ...plant('other'), cultivarId: 'previous-variety' };
+  const rules = [], before = structuredClone([current, previous, rules]);
+  assert.deepEqual(rotationAdvice(current, previous, rules), { rules: [], relationship: 'avoid_after', automatic: true });
+  assert.equal(rotationAdvice(current, plant('other', 'different-family'), rules).relationship, 'unknown');
+  assert.equal(rotationAdvice({ ...current, familyId: '' }, { ...previous, familyId: '' }, rules).relationship, 'unknown');
+  assert.deepEqual([current, previous, rules], before);
+});
+
+test('explicit family, crop and cultivar exceptions override the automatic fallback while caution still wins specificity ties', () => {
+  const current = { ...plant(), cultivarId: 'current-variety' }, previous = { ...plant('old'), cultivarId: 'old-variety' };
+  const broad = rotation({ previous_family_id: 'family', relationship: 'favourable_after' });
+  assert.equal(rotationAdvice(current, previous, [broad]).relationship, 'favourable_after');
+  assert.equal(rotationAdvice(current, previous, [broad]).automatic, false);
+  const cropRule = rotation({ id: 'crop-exception', current_family_id: null, current_plant_id: 'crop', previous_family_id: null, previous_plant_id: 'old', relationship: 'favourable_after' });
+  const cultivarRule = { ...cropRule, id: 'cultivar-exception', current_plant_id: null, current_cultivar_id: 'current-variety', previous_plant_id: null, previous_cultivar_id: 'old-variety' };
+  const avoid = rotation({ previous_family_id: 'family' });
+  for (const exception of [cropRule, cultivarRule]) {
+    const result = rotationAdvice(current, previous, [avoid, exception]);
+    assert.equal(result.relationship, 'favourable_after'); assert.deepEqual(result.rules, [exception]); assert.equal(result.automatic, false);
+    assert.equal(rotationAdvice(current, previous, [exception, { ...exception, id: 'tie', relationship: 'avoid_after' }]).relationship, 'avoid_after');
+  }
+  assert.equal(rotationAdvice(previous, current, [cropRule]).automatic, true, 'directional exceptions do not reverse');
+});
+
+test('automatic family advice uses recorded ground evidence, works without reference data and leaves history intact', () => {
+  const history = groundHistory([event('1', '2025-01-01', [bed({ areaPlan: plan(area({ plant: plant('old') })) })])], '2026-11-18');
+  const before = structuredClone(history);
+  for (const data of [references(), null]) {
+    const candidate = suggest(input({ history, references: data })).candidates[0];
+    const reasons = candidate.reasons.filter(r => r.code === 'suggestions.rotationFamily');
+    assert.equal(reasons.length, 1); assert.equal(reasons[0].caution, true); assert.deepEqual(reasons[0].sourceIds, ['1']);
+    assert.equal(reasons[0].values.plant, 'old'); assert.equal(reasons[0].values.family, 'family');
+  }
+  assert.deepEqual(history, before);
+  const distant = history.map(o => ({ ...o, xCm: 100 }));
+  assert.ok(!codes(suggest(input({ history: distant })).candidates[0]).includes('suggestions.rotationFamily'));
+  assert.ok(!codes(suggest(input({ history: null })).candidates[0]).includes('suggestions.rotationFamily'));
+});
+
+test('interval warnings replace duplicate automatic warnings, while explicit exceptions retain independent interval warnings', () => {
+  const history = groundHistory([event('1', '2025-01-01', [bed({ areaPlan: plan(area({ plant: plant('old') })) })])], '2026-11-18');
+  const data = references({ plant_guidance: [{ id: 'care', version: 1, plant_type_id: 'crop', cultivar_id: null, rotation_years: 3 }] });
+  const candidate = suggest(input({ history, references: data })).candidates[0];
+  assert.equal(candidate.reasons.filter(r => r.code === 'suggestions.rotationInterval').length, 1);
+  assert.ok(!codes(candidate).includes('suggestions.rotationFamily'));
+  const interval = candidate.reasons.find(r => r.code === 'suggestions.rotationInterval');
+  assert.equal(interval.values.years, 3); assert.deepEqual(interval.sourceIds, ['1']);
+  data.rotation_rules = [rotation({ current_family_id: null, current_plant_id: 'crop', previous_family_id: null, previous_plant_id: 'old', relationship: 'favourable_after', notes: 'Explicit exception' })];
+  const exception = suggest(input({ history, references: data })).candidates[0];
+  assert.ok(codes(exception).includes('suggestions.rotationGood')); assert.ok(codes(exception).includes('suggestions.rotationInterval'));
+  assert.ok(!codes(exception).includes('suggestions.rotationFamily')); assert.ok(!codes(exception).includes('suggestions.rotationAvoid'));
+});
+
+test('family fallback is reflected in candidate ranking and each green-manure component without changing saved snapshots', () => {
+  const catalogue = input().catalogue; catalogue.plants.push(crop('unrelated', 'other-family'));
+  catalogue.families.push({ id: 'other-family', name: 'Other family', version: 1 }, { id: 'new-family', name: 'New family', version: 1 });
+  const history = groundHistory([event('1', '2025-01-01', [bed({ areaPlan: plan(area({ plant: plant('old') })) })])], '2026-11-18');
+  const mixtures = [{ id: 'mix', name: 'Mix', version: 1, notes: '', components: [{ plantTypeId: 'crop', cultivarId: null, percentage: 50 }, { plantTypeId: 'unrelated', cultivarId: null, percentage: 50 }] }];
+  const data = references({ plant_calendar_entries: [entry(), entry({ id: 'unrelated-entry', plant_type_id: 'unrelated' })], calendar_windows: [window(), window({ id: 'unrelated-window', calendar_entry_id: 'unrelated-entry' })] });
+  const result = suggest(input({ history, catalogue, mixtures, references: data }));
+  assert.equal(result.candidates[0].id, 'unrelated');
+  assert.equal(result.candidates.find(c => c.id === 'mixture:mix').reasons.filter(r => r.code === 'suggestions.rotationFamily').length, 1);
+  const savedFamily = history[0].plant.familyId;
+  catalogue.plants[0].familyId = 'new-family';
+  assert.ok(!codes(suggest(input({ history, catalogue })).candidates.find(c => c.id === 'crop')).includes('suggestions.rotationFamily'));
+  assert.equal(history[0].plant.familyId, savedFamily);
+});

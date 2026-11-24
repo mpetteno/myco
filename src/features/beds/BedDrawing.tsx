@@ -25,14 +25,16 @@ type BedDrawingProps = {
   contentOverlay?: ReactNode;
   showLabels?: boolean;
   showDistanceGuides?: boolean;
+  resizeEnabled?: boolean;
   canResize?: (bed: Bed) => boolean;
   readOnly?: boolean; editableBedId?: string;
   obstacles?: Bed[];
   resizeObstacles?: Bed[];
   resizePreview?: (bed: Bed) => Bed[] | null;
+  onResizeBlocked?: (message: string | null) => void;
 };
 
-export function BedDrawing({ beds, garden, pixelsPerCm, dark, viewRotationDeg, selectedBedId, onSelectBed, onOpenBed, onMoveBed, onResizeBed, onPreviewBed, surfaceOverlay, contentOverlay, showLabels = true, showDistanceGuides = true, canResize, readOnly = false, editableBedId, obstacles = beds, resizeObstacles = obstacles, resizePreview }: BedDrawingProps) {
+export function BedDrawing({ beds, garden, pixelsPerCm, dark, viewRotationDeg, selectedBedId, onSelectBed, onOpenBed, onMoveBed, onResizeBed, onPreviewBed, surfaceOverlay, contentOverlay, showLabels = true, showDistanceGuides = true, canResize, resizeEnabled = true, readOnly = false, editableBedId, obstacles = beds, resizeObstacles = obstacles, resizePreview, onResizeBlocked }: BedDrawingProps) {
   const [preview, setPreview] = useState<Bed | null>(null);
   const [movingId, setMovingId] = useState<string | null>(null);
   const [movePreview, setMovePreview] = useState<Bed | null>(null);
@@ -74,9 +76,9 @@ export function BedDrawing({ beds, garden, pixelsPerCm, dark, viewRotationDeg, s
           pixelsPerCm={pixelsPerCm} dark={dark} />
       ))}
       {contentOverlay}
-      {selectedBed && !movingId && !readOnly && (!editableBedId || editableBedId === selectedBed.id) && (
+      {selectedBed && resizeEnabled && !movingId && !readOnly && (!editableBedId || editableBedId === selectedBed.id) && (
         <BedResizeHandles key={selectedBed.id} bed={selectedBed} beds={resizeObstacles} garden={garden}
-          canResize={canResize} dark={dark}
+          canResize={canResize} dark={dark} onBlocked={onResizeBlocked}
           pixelsPerCm={pixelsPerCm} onPreview={(next) => { setPreview(next); onPreviewBed?.(next); }}
           onCommit={(resized) => { onResizeBed(resized.id, resized); setPreview(null); onPreviewBed?.(null); }} />
       )}

@@ -80,13 +80,16 @@ test('removal cleans cultivar-owned guidance atomically and preserves parent gui
   const fixture=await setup();const {db,crop,cultivar,material,profile,entry,parentCare}=fixture;
   try {
     const document=await documents(fixture);const before=await snapshots(db);
+    const materialCount = Number((await db.query('select count(*) from public.mulch_types')).rows[0].count);
     const profileVersion=Number((await db.query('select version from public.calendar_profiles where id=$1',[profile])).rows[0].version);
     await asUser(db,admin);
     await db.query('select public.myco_remove_mulch_type($1,$2)',[material.id,material.version]);
     await stale(db.query('select public.myco_remove_mulch_type($1,$2)',[material.id,material.version]));
     await db.query('select public.myco_remove_cultivar($1,$2)',[cultivar.id,cultivar.version]);
     await stale(db.query('select public.myco_remove_cultivar($1,$2)',[cultivar.id,cultivar.version]));
-    for(const table of ['plant_cultivars','mulch_types','plant_depths','plant_calendar_entries','calendar_windows'])assert.equal((await db.query(`select id from public.${table}`)).rows.length,0,table);
+    for(const table of ['plant_cultivars','plant_depths','plant_calendar_entries','calendar_windows'])assert.equal((await db.query(`select id from public.${table}`)).rows.length,0,table);
+    assert.equal(Number((await db.query('select count(*) from public.mulch_types')).rows[0].count), materialCount - 1);
+    assert.equal((await db.query('select id from public.mulch_types where id=$1',[material.id])).rows.length,0);
     assert.equal((await db.query('select id from public.plant_guidance')).rows[0].id,parentCare);
     assert.equal((await db.query('select id from public.plant_types')).rows[0].id,crop.id);
     assert.equal(Number((await db.query('select version from public.calendar_profiles where id=$1',[profile])).rows[0].version),profileVersion+1);
@@ -127,4 +130,102 @@ test('unexpected foreign-key failures roll back all child cleanup and calendar r
     assert.equal((await db.query('select id from public.plant_depths where cultivar_id=$1',[cultivar.id])).rows.length,1);
     assert.equal((await db.query('select version from public.calendar_profiles where id=$1',[profile])).rows[0].version,profileVersion);
   } finally {await db.close();}
+});
+
+const removeEntry = (db, kind, row) => db.query(`select public.myco_remove_${kind}($1,$2)`, [row.id, Number(row.version)]);
+const fresh = async (db, table, id) => (await db.query(`select * from public.${table} where id=$1`, [id])).rows[0];
+
+test('new removal RPCs deny readers, anonymous callers and stale requests while direct deletes stay unavailable', async () => {
+  const { db, crop } = await setup();
+  try {
+    const kinds = ['plant_family', 'plant_type', 'seed_mixture', 'mulch_category'];
+    await asUser(db, reader);
+    for (const kind of kinds) await denied(removeEntry(db, kind, crop));
+    await db.exec('reset role; set role anon;');
+    for (const kind of kinds) await denied(removeEntry(db, kind, crop));
+    await asUser(db, admin);
+    for (const kind of kinds) await stale(removeEntry(db, kind, { id: crop.id, version: 999999 }));
+    for (const table of ['plant_families', 'plant_types', 'seed_mixtures', 'mulch_categories']) await denied(db.query(`delete from public.${table}`));
+    await db.exec('reset role;'); await db.query('delete from public.catalogue_administrators where user_id=$1', [admin]);
+    await asUser(db, admin); for (const kind of kinds) await denied(removeEntry(db, kind, crop));
+  } finally { await db.close(); }
+});
+
+test('families and mulch categories reject dependencies and remove only unused entries', async () => {
+  const { db, crop, family } = await setup();
+  try {
+    const emptyFamily = (await db.query("insert into public.plant_families(name) values('Empty family') returning *")).rows[0];
+    const organic = (await db.query("select * from public.mulch_categories where code='organic'")).rows[0];
+    const living = (await db.query("select * from public.mulch_categories where code='living'")).rows[0];
+    const synthetic = (await db.query("select * from public.mulch_categories where code='synthetic'")).rows[0];
+    await asUser(db, admin);
+    await assert.rejects(removeEntry(db, 'plant_family', await fresh(db, 'plant_families', family)), error => error.code === '23503');
+    await assert.rejects(removeEntry(db, 'mulch_category', organic), error => error.code === '23503');
+    await assert.rejects(removeEntry(db, 'mulch_category', living), error => error.code === '23503' && /enabled living/.test(error.message));
+    await removeEntry(db, 'plant_family', emptyFamily); await stale(removeEntry(db, 'plant_family', emptyFamily));
+    const sheet = (await db.query('select * from public.mulch_types where category_id=$1', [synthetic.id])).rows[0];
+    await removeEntry(db, 'mulch_type', sheet); await removeEntry(db, 'mulch_category', synthetic);
+    assert.equal((await db.query('select id from public.mulch_categories where id=$1', [synthetic.id])).rows.length, 0);
+    assert.ok(await fresh(db, 'plant_types', crop.id));
+  } finally { await db.close(); }
+});
+
+test('crop removal cleans owned guidance and relationships, keeps provenance and never changes saved snapshots', async () => {
+  const fixture = await setup(); const { db, crop, cultivar, family, profile } = fixture;
+  try {
+    await documents(fixture); const before = await snapshots(db); await asUser(db, admin);
+    await assert.rejects(removeEntry(db, 'plant_type', await fresh(db, 'plant_types', crop.id)), error => error.code === '23503');
+    await removeEntry(db, 'cultivar', cultivar);
+    await db.exec('reset role;');
+    await db.query("insert into public.plant_depths(plant_type_id,planting_method,depth_cm) values($1,'seed',2)", [crop.id]);
+    const entry = (await db.query("insert into public.plant_calendar_entries(plant_type_id,calendar_profile_id,activity,planting_method) values($1,$2,'harvest','plant') returning id", [crop.id, profile])).rows[0];
+    await db.query('insert into public.calendar_windows(calendar_entry_id,start_month,end_month) values($1,5,8)', [entry.id]);
+    await db.query("insert into public.companion_rules(family_a_id,plant_b_id,relationship) values($1,$2,'companion')", [family, crop.id]);
+    await db.query("insert into public.rotation_rules(current_plant_id,previous_family_id,relationship) values($1,$2,'avoid_after')", [crop.id, family]);
+    const source = (await db.query("insert into public.catalogue_import_sources(source_key,filename,row_number,source_data,plant_type_id) values('delete-test','source.csv',1,'{\"original\":true}',$1) returning id", [crop.id])).rows[0];
+    const revision = Number((await fresh(db, 'calendar_profiles', profile)).version);
+    await asUser(db, admin);
+    await removeEntry(db, 'plant_type', await fresh(db, 'plant_types', crop.id));
+    for (const table of ['plant_types', 'plant_guidance', 'plant_depths', 'plant_calendar_entries', 'calendar_windows', 'companion_rules', 'rotation_rules']) assert.equal((await db.query(`select id from public.${table}`)).rows.length, 0, table);
+    assert.equal((await fresh(db, 'catalogue_import_sources', source.id)).plant_type_id, null);
+    assert.deepEqual((await fresh(db, 'catalogue_import_sources', source.id)).source_data, { original: true });
+    assert.ok(Number((await fresh(db, 'calendar_profiles', profile)).version) > revision);
+    assert.deepEqual(await snapshots(db), before);
+  } finally { await db.close(); }
+});
+
+test('seed mixtures remove components atomically while saved mixture snapshots and crops remain intact', async () => {
+  const fixture = await setup(); const { db, crop, cultivar } = fixture;
+  try {
+    const document = await documents(fixture);
+    await db.exec('begin;');
+    const mix = (await db.query("insert into public.seed_mixtures(name) values('Cover mixture') returning *")).rows[0];
+    await db.query('insert into public.seed_mixture_components(mixture_id,plant_type_id,cultivar_id,weight_percent,position) values($1,$2,$3,100,0)', [mix.id, crop.id, cultivar.id]);
+    await db.exec('commit;');
+    const plant = document.beds[0].plantingPlan.areas[0].plant;
+    const snapshot = { id: mix.id, name: mix.name, notes: '', version: Number(mix.version), components: [{ plant, percentage: 100 }] };
+    const beds = [{ ...bed, areaPlan: { version: 1, respectAreaSpacing: true, areas: [{ id: 'cover', name: '', xCm: 0, yCm: 0, widthCm: 100, lengthCm: 100,
+      kind: 'broadcast', purpose: 'green_manure', sowing: { kind: 'mixture', mixture: snapshot }, density: 5, densityUnit: 'g_m2', mulch: [] }] } }];
+    await db.query('insert into public.gardens(owner_id,name,width_cm,length_cm,beds,location) values($1,$2,500,500,$3,$4)', [reader, 'Cover', JSON.stringify(beds), { countryCode: 'IT', regionCode: 'IT-25', displayName: 'Lombardia' }]);
+    const before = await snapshots(db); await asUser(db, admin);
+    await assert.rejects(removeEntry(db, 'cultivar', await fresh(db, 'plant_cultivars', cultivar.id)), error => error.code === '23503');
+    await removeEntry(db, 'seed_mixture', mix);
+    assert.equal((await db.query('select id from public.seed_mixture_components')).rows.length, 0);
+    assert.ok(await fresh(db, 'plant_types', crop.id));
+    assert.deepEqual(await snapshots(db), before);
+  } finally { await db.close(); }
+});
+
+test('unexpected crop dependencies roll back guidance cleanup and provenance changes', async () => {
+  const { db, crop, cultivar } = await setup();
+  try {
+    await asUser(db, admin); await removeEntry(db, 'cultivar', cultivar);
+    await db.exec('reset role;create table public.future_crop_reference(crop_id uuid references public.plant_types(id));');
+    await db.query('insert into public.future_crop_reference values($1)', [crop.id]);
+    const before = (await db.query('select to_jsonb(g) as row from public.plant_guidance g')).rows;
+    await asUser(db, admin);
+    await assert.rejects(removeEntry(db, 'plant_type', await fresh(db, 'plant_types', crop.id)), error => error.code === '23503');
+    assert.deepEqual((await db.query('select to_jsonb(g) as row from public.plant_guidance g')).rows, before);
+    assert.ok(await fresh(db, 'plant_types', crop.id));
+  } finally { await db.close(); }
 });

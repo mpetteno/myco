@@ -1,7 +1,9 @@
-import { useWorkspaceNavigation } from '../../shared/navigation/WorkspaceNavigation';
+import { useGuardedBack } from '../../shared/navigation/WorkspaceNavigation';
+import { PageBackLabel, usePageBackAction } from '../../shared/navigation/PageBackNavigation';
 import { ReferenceCataloguePanel } from './ReferenceCataloguePanel';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../../shared/ui/Button';
+import { BackButton } from '../../shared/ui/BackButton';
 import { TextField } from '../../shared/ui/TextField';
 import { SelectField } from '../../shared/ui/SelectField';
 import { useI18n } from '../../shared/i18n/I18nProvider';
@@ -16,9 +18,8 @@ import type { GardenLocation } from '../gardens/gardenLocation';
 import type { GardenDocument } from '../gardens/gardenDocument';
 import { areaPlanFromBed } from '../area-editor/areaPlan';
 
-export function GrowingCalendar({ userId, location, garden }: { userId: string; location?: GardenLocation; garden?: GardenDocument }) {
+export function GrowingCalendar({ userId, location, garden, onPlan }: { userId: string; location?: GardenLocation; garden?: GardenDocument; onPlan?: (title: string) => void }) {
   const { t, locale } = useI18n();
-  const navigation = useWorkspaceNavigation();
   const [configuration, setConfiguration] = useState<'calendar_profiles' | 'calendar_coverage'>();
   const [data, setData] = useState<ReferenceData>();
   const [error, setError] = useState('');
@@ -42,11 +43,7 @@ export function GrowingCalendar({ userId, location, garden }: { userId: string; 
   if (!data) return <div className="space-y-3"><p role={error ? 'alert' : 'status'}>{error || t('catalogue.loadingReference')}</p>{error && <Button onClick={() => setAttempt(attempt + 1)}>Try again</Button>}</div>;
   const coverage = data.calendar_coverage.find((row) => row.country_code === contextLocation?.countryCode && row.region_code === contextLocation?.regionCode);
   const profile = data.calendar_profiles.find((row) => row.id === (profileId || coverage?.calendar_profile_id)) ?? data.calendar_profiles[0];
-  if (configuration) return <div className="space-y-4">
-    <Button variant="secondary" onClick={() => { const back = () => setConfiguration(undefined); if (navigation) navigation.request(back); else back(); }}>Back to growing calendar</Button>
-    <h2 className="text-lg font-semibold">{configuration === 'calendar_profiles' ? 'Calendar profiles' : 'Regional coverage'}</h2>
-    <ReferenceCataloguePanel userId={userId} section={configuration} />
-  </div>;
+  if (configuration) return <CalendarConfiguration userId={userId} section={configuration} onBack={() => setConfiguration(undefined)} />;
   if (detail) return <CropGuidancePanel {...detail} userId={userId} onBack={() => { setDetail(undefined); requestAnimationFrame(() => { list.current?.scrollIntoView({ block: 'start' }); const parent = list.current?.closest('[data-page-scroll]'); if (parent) parent.scrollTop = scroll.current; }); setAttempt(attempt + 1); }} />;
   const planted = new Set<string>();
   for (const bed of garden?.beds ?? []) for (const area of areaPlanFromBed(bed).areas) {
@@ -108,11 +105,23 @@ export function GrowingCalendar({ userId, location, garden }: { userId: string; 
         {calendarNote(String(entry.notes ?? ''), windows(entry)) && <p className="whitespace-pre-wrap text-sm text-stone-600 dark:text-stone-400">{calendarNote(String(entry.notes ?? ''), windows(entry))}</p>}
       </li>)}</ul>
       <Button variant="secondary" onClick={() => open(owner)}>View details</Button>
+      {onPlan && <Button variant="secondary" onClick={() => onPlan(`Plan work for ${owner.name}`)}>Plan an activity</Button>}
     </li>)}</ul>
     <Button variant="secondary" onClick={() => setAttempt(attempt + 1)}>Refresh calendar</Button>
     {data.isAdmin && <details className="rounded-xl border border-stone-200 p-3 dark:border-stone-700"><summary className="min-h-11 cursor-pointer text-sm font-medium">Calendar settings</summary>
       <div className="space-y-2 pt-2"><Button variant="secondary" onClick={() => setConfiguration('calendar_profiles')}>Calendar profiles</Button>
         <Button variant="secondary" onClick={() => setConfiguration('calendar_coverage')}>Regional coverage</Button></div>
     </details>}
+  </div>;
+}
+
+function CalendarConfiguration({ userId, section, onBack }: { userId: string; section: 'calendar_profiles' | 'calendar_coverage'; onBack: () => void }) {
+  const back = useGuardedBack(onBack);
+  const inHeader = usePageBackAction({ label: 'Back to seasonal guidance', onClick: back }, -1);
+  const title = section === 'calendar_profiles' ? 'Calendar profiles' : 'Regional coverage';
+  return <div className="space-y-4">
+    {!inHeader && <BackButton showLabel label="Back to seasonal guidance" onClick={back} />}
+    <h2 className="text-lg font-semibold">{title}</h2>
+    <PageBackLabel label={`Back to ${title.toLowerCase()}`}><ReferenceCataloguePanel userId={userId} section={section} /></PageBackLabel>
   </div>;
 }

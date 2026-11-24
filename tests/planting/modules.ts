@@ -13,3 +13,4 @@ export { validateGarden } from '../../src/features/gardens/gardenDocument';
 export { saveGarden, loadGarden } from '../../src/features/gardens/gardenRepository';
 
 export { resizeAreas } from '../../src/features/area-editor/resizeAreas';
+export * from '../../src/features/planting/plantClearances';

@@ -11,15 +11,6 @@ test('day selection uses the final event on or before the chosen day without inv
   assert.equal(model.eventOnDate(events, '2026-02-15').id, 'b');
   assert.equal(model.eventOnDate(events, '2026-03-01').id, 'c');
 });
-test('event navigation preserves same-day order and steps from intervening dates to their nearest event', () => {
-  assert.equal(model.eventNeighbours(events, 'a', '2026-02-10', false).previous, null);
-  assert.equal(model.eventNeighbours(events, 'a', '2026-02-10', false).next.id, 'b');
-  assert.equal(model.eventNeighbours(events, 'b', '2026-02-15', false).previous.id, 'b');
-  assert.equal(model.eventNeighbours(events, 'b', '2026-02-15', false).next.id, 'c');
-  assert.equal(model.eventNeighbours(events, null, '2026-02-01', false).next.id, 'a');
-  assert.equal(model.eventNeighbours(events, null, '2026-02-01', true).previous.id, 'c');
-  assert.equal(model.eventNeighbours([], null, '2026-02-01', true).previous, null);
-});
 test('date handling rejects impossible dates and uses the local calendar day instead of UTC truncation', () => {
   assert.equal(model.parseDay('2026-02-29'), null);
   assert.ok(model.parseDay('2024-02-29')); assert.ok(model.parseDay('0001-01-01'));

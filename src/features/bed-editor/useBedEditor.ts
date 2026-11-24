@@ -32,6 +32,9 @@ export function useBedEditor({ bed, userId, onSavePlan, beforeLeaving, onBack, s
   const plan = edits.value, setPlan = edits.setValue;
   const [savedKey, setSavedKey] = useState(() => JSON.stringify(plan));
   const [selectedId, setSelectedId] = useState<string | null>(plan.areas[0]?.id ?? null);
+  const [resizingId, setResizingId] = useState<string | null>(null);
+  function selectArea(id: string | null) { if (id !== selectedId) setResizingId(null); setSelectedId(id); }
+  const resizing = !!resizingId && resizingId === selectedId && plan.areas.some((area) => area.id === resizingId);
   const [catalogue, setCatalogue] = useState<Catalogue | null>(null);
   const [mixtures, setMixtures] = useState<SeedMixture[]>([]);
   const [mulchCatalogue, setMulchCatalogue] = useState<MulchCatalogue | null>(null);
@@ -123,7 +126,8 @@ export function useBedEditor({ bed, userId, onSavePlan, beforeLeaving, onBack, s
         : { ...base, kind: 'rows', purpose: 'crop', plant, plantSpacingCm: plant.plantSpacingCm ?? 0,
           rowSpacingCm: plant.rowSpacingCm ?? (selected.kind === 'rows' ? selected.rowSpacingCm : 5),
           rowDirection: selected.kind === 'rows' ? selected.rowDirection : defaultRowDirection(bed),
-          rowCount: selected.kind === 'rows' ? selected.rowCount : DEFAULT_AREA_ROWS };
+          rowCount: selected.kind === 'rows' ? selected.rowCount : DEFAULT_AREA_ROWS,
+          ...(selected.kind === 'rows' && selected.clearancesCm !== undefined ? { clearancesCm: selected.clearancesCm } : {}) };
     }
     setError('');
     setPlan((current) => ({ ...current, areas: current.areas.map((a) => a.id === selected.id ? next : a) }));
@@ -178,9 +182,10 @@ export function useBedEditor({ bed, userId, onSavePlan, beforeLeaving, onBack, s
       try { area = { ...base, purpose: 'green_manure', kind: 'broadcast', sowing: { kind: 'mixture', mixture: snapshotSeedMixture(mixtures[0], catalogue) }, density: 0, densityUnit: 'g_m2' }; }
       catch (problem) { setError((problem as Error).message); return; }
     } else { setError(loading ? 'Loading planting references…' : 'Add a crop or seed mixture to the catalogue before creating an area.'); return; }
-    setPlan({ ...plan, areas: [...plan.areas, area] }); setSelectedId(area.id);
+    setPlan({ ...plan, areas: [...plan.areas, area] }); setSelectedId(area.id); setResizingId(area.id);
   }
   function splitSelected() {
+    setResizingId(null);
     if (!selected || plan.areas.length >= MAX_AREAS) return;
     const width = selected.widthCm >= selected.lengthCm, size = width ? selected.widthCm : selected.lengthCm;
     if (size < 10) { setError('This area is too small to split.'); return; }
@@ -191,6 +196,7 @@ export function useBedEditor({ bed, userId, onSavePlan, beforeLeaving, onBack, s
     setPlan({ ...plan, areas: plan.areas.flatMap((area) => area.id === selected.id ? [first, second] : [area]) }); setSelectedId(second.id);
   }
   function removeSelected() {
+    setResizingId(null);
     const areas = plan.areas.filter((area) => area.id !== selectedId);
     setPlan({ ...plan, areas }); setSelectedId(areas[0]?.id ?? null); setError('');
   }
@@ -211,6 +217,7 @@ export function useBedEditor({ bed, userId, onSavePlan, beforeLeaving, onBack, s
     updateArea(selected.id, { mulch: layers });
   }
   function resetFromBed(next: Bed) {
+    setResizingId(null);
     const loaded = readPlan(next), value = loaded.plan;
     edits.reset(value); setSelectedId(value.areas[0]?.id ?? null); setSavedKey(JSON.stringify(value)); lastAutoAttempt.current = null; setError(loaded.warning);
   }
@@ -223,17 +230,19 @@ export function useBedEditor({ bed, userId, onSavePlan, beforeLeaving, onBack, s
   }
   function restoreEdit(next: BedAreaPlan | null) {
     if (!next) return;
+    setResizingId(null);
     lastAutoAttempt.current = null;
     setSelectedId(next.areas.some((area) => area.id === selectedId) ? selectedId : next.areas[0]?.id ?? null);
     setError('');
   }
   function discardDraft() { resetFromBed(bed); }
-  return { draft: { plan, setPlan, selected, selectedId, setSelectedId, catalogue, mixtures, loading, error: error || referenceError,
+  return { draft: { plan, setPlan, selected, selectedId, setSelectedId: selectArea, catalogue, mixtures, loading, error: error || referenceError,
       setError, retry: () => setAttempt((value) => value + 1), updateArea, bounds, choosePlant, changeKind, changePurpose, addArea, splitSelected, removeSelected },
+    resizing, setResizing: (active: boolean) => setResizingId(active ? selectedId : null),
     suggestions, suggestionLocation: suggestionContext?.location, applySuggestion, rows, preview, advice, validation, dirty, leaving, confirmLeave, setConfirmLeave, mulchCatalogue,
     addLayer, chooseMaterial, removeLayer, reorderLayer, canUndo: edits.canUndo, canRedo: edits.canRedo,
     undo: () => restoreEdit(edits.undo()), redo: () => restoreEdit(edits.redo()),
     back: () => { if (dirty) setConfirmLeave(true); else void returnToGarden(); },
     discardAndBack: () => { discardDraft(); setConfirmLeave(false); void returnToGarden(); },
-    discardDraft, resetFromBed, clearPlan: () => { lastAutoAttempt.current = null; setPlan(emptyAreaPlan()); setSavedKey(''); setSelectedId(null); setError(''); } };
+    discardDraft, resetFromBed, clearPlan: () => { setResizingId(null); lastAutoAttempt.current = null; setPlan(emptyAreaPlan()); setSavedKey(''); setSelectedId(null); setError(''); } };
 }

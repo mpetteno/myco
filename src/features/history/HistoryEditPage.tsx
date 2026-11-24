@@ -5,6 +5,7 @@ import { GardenPage } from '../garden/GardenPage';
 import type { SavedGarden } from '../gardens/gardenDocument';
 import { Button } from '../../shared/ui/Button';
 import { Sheet } from '../../shared/ui/Sheet';
+import { PageHeader } from '../../shared/ui/PageHeader';
 import { TextField } from '../../shared/ui/TextField';
 import { useVisualViewport } from '../../shared/hooks/useVisualViewport';
 import type { GardenEventSnapshot } from './gardenHistory';
@@ -56,14 +57,12 @@ export function HistoryEditPage({ draft, current, user, onBack, onSaved, onReloa
     catch (problem) { const error = historyError(problem); setError(error.message); setConflict(error.conflict); }
     finally { busy.current = false; setPending(false); }
   }
-  const style = { height: viewport.heightPx, '--editor-height': `calc(${viewport.heightPx}px - 4rem - env(safe-area-inset-top))`, '--editor-safe-top': '0px' } as CSSProperties;
+  const style = { height: viewport.heightPx, '--editor-height': `calc(${viewport.heightPx}px - 4.5rem - env(safe-area-inset-top))`, '--editor-safe-top': '0px' } as CSSProperties;
   return <div style={style} className="overflow-hidden bg-stone-50 pt-[env(safe-area-inset-top)] font-sans text-stone-900 dark:bg-stone-950 dark:text-stone-100">
-    <header className="flex h-16 items-center gap-2 border-b border-amber-300 bg-amber-50 pr-[max(0.75rem,env(safe-area-inset-right))] pl-[max(0.75rem,env(safe-area-inset-left))] dark:border-amber-900 dark:bg-amber-950">
-      <button type="button" disabled={pending} onClick={() => void back()} className="min-h-11 shrink-0 cursor-pointer px-2 text-sm">← History</button>
-      <div className="min-w-0 flex-1 text-xs"><p className="truncate font-semibold">{draft.event ? 'Correct history record' : draft.bedId ? 'New past bed edit' : 'New past garden edit'}</p>
-        <p className="truncate">Draft · {details.date} · later records and current plan stay unchanged</p></div>
-      <div className="shrink-0"><Button disabled={!valid || pending} onClick={() => void review()}>Save history record</Button></div>
-    </header>
+    <PageHeader tone="draft" headingAs="h2" title={draft.event ? 'Correct history record' : draft.bedId ? 'New past bed edit' : 'New past garden edit'}
+      subtitle={`Draft · ${details.date} · later records and current plan stay unchanged`}
+      back={{ label: 'Back to history', disabled: pending, onClick: () => void back() }}
+      actions={<Button disabled={!valid || pending} onClick={() => void review()}>Save history record</Button>} />
     <GardenPage garden={{ ...current, ...draft.document }} user={user} historyDraft={{ bedId: draft.bedId, bridge, onValidityChange: setValid }}
       onSaved={(next) => setDocument(historyDocument(next))} pickerOpen={form || discard} onChooseGardens={() => {}} onReload={async () => {}} onDiscardChanges={() => {}} />
     {form && <Sheet title={draft.event ? 'Save corrected record' : 'Add historical record'} dismissible={!pending} onClose={() => setForm(false)}>

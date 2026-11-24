@@ -121,10 +121,10 @@ family, crop and material IDs remain unchanged. The hierarchy is **Family → Cr
 can carry an optional scientific name; botanical species are not another table.
 Select a crop without specifying a cultivar when the variety is unknown.
 
-The catalogue has visible **Plants**, **Calendar**, and **Mulch** groups. Plants contains
-crops, families, cultivars, and seed mixtures. Calendar opens the monthly growing
-calendar; calendar profiles and coverage are administrator configuration. Mulch
-contains materials, with category configuration available to administrators. Select a crop or cultivar
+The catalogue has visible **Plants** and **Mulch** groups. Plants contains crops,
+families, cultivars, and seed mixtures. Mulch contains materials, with category
+configuration available to administrators. Editor **Calendar → Open full calendar → Seasonal guidance** opens the
+calendar; administrators manage profiles and coverage under its **Calendar settings**. Select a crop or cultivar
 name, or **View details**, to open one page containing its identity, spacing, notes,
 **Care guidance**, **Planting depths**, **Companions**, **Rotation rules** and **Growing
 calendar**. All sections are visible together, without tabs or collapsed panels.
@@ -147,6 +147,19 @@ remove or undo owned links before saving. A plant is listed once per relationshi
 type; inherited links use the most specific available recommendation. Relationship
 notes are no longer displayed or edited; existing stored notes are retained.
 Removing owned links takes effect with Save and can be undone before saving.
+
+Crop and cultivar **Avoid after** lists include their own family as a calculated
+default, labelled **Automatic**. It has no move/remove controls and follows the
+crop’s selected family. An existing rule for that family is displayed once;
+explicit favourable family rules replace the default. Favourable crops or
+cultivars within the same family are labelled as exceptions. Existing inherited
+and explicit rule precedence remains intact. Removing an owned exception restores
+the automatic default when no other explicit family rule applies.
+
+The automatic row is never added to the editable draft or stored as a rotation
+record. Browsing remains write-free, and saving unrelated fields creates no
+rotation changes. Saved planting/history snapshots retain their captured family.
+No database migration or catalogue backfill is needed.
 
 Apply `202611170028_crop_editor.sql` after 027 to enable the administrator-only
 `myco_save_crop_editor` transaction. It permits only named catalogue fields and
@@ -190,7 +203,7 @@ window writes are denied even to catalogue administrators.
 
 New gardens require a region from the dropdown, with an optional city name. The
 list contains the twelve supported central/northern Italian regions. **Edit garden → Garden location** adds or updates
-location for existing gardens. **More → Garden growing calendar** automatically
+location for existing gardens. **Calendar → Open full calendar → Seasonal guidance** automatically
 loads their region's calendar and resolves crop/cultivar overrides. Users cannot
 manually select a calendar. Existing gardens without a location remain editable.
 Location is current garden metadata, stored as `gardens.location` JSON, rather
@@ -310,14 +323,23 @@ rewrite saved area composition or history. See [Unified areas](areas.md).
 
 ## Navigation and growing calendar
 
-The shared **Gardens**, **Catalogue**, and **Growing calendar** navigation is available
-in garden, bed, and focused-area screens. Browsing preserves the mounted editor,
+The top-right **Menu** contains **Gardens**, **Catalogue**, Help and Account.
+**Seasonal guidance** belongs to the current garden: use the editor’s **Calendar → Open full calendar → Seasonal guidance**. It waits for pending saves and identifies
+the garden and location in its header. Switching gardens resets its browsing
+context. No calendar action appears without an active garden. Browsing preserves the mounted editor,
 selection and controls. Contextual Back returns to the origin; changing gardens
 continues to use the existing save checks. Catalogue section searches and list
 positions are retained when browsing details or switching sections. Failed saves
 keep all form values and prevent the requested navigation.
 
-The growing calendar starts with the current month and all catalogue crops. Use
+Headers use the same 72 px height, title size, alignment and chevron Back control
+as the editors. Catalogue and Calendar details put Back in the header, without
+a second back row in the content. Back returns to the list before leaving the
+destination; nested Calendar forms return through configuration to the calendar.
+Visits between Catalogue and Calendar unwind in reverse order and preserve the
+mounted editor. Back keeps its destination in an accessible label and tooltip.
+
+Calendar opens Work first. Choose **Seasonal guidance** for the current month and all catalogue crops. Use
 month arrows, **Today**, crop/variety search, and activity filtering; **In this garden**
 restricts results to crops in the latest saved garden plan, including mixtures.
 **Annual view** shows all twelve months. Variety results apply cultivar overrides
@@ -343,3 +365,37 @@ The connected database was updated on 19 November 2026: 181 activities retained,
 204 → 199 windows, 176 repeated notes cleared, and five contextual notes retained.
 The checksum over all activity/month pairs was unchanged:
 `505a9a081549fd02926ceee37d743339`.
+
+
+## Linked browsing — 24 November 2026
+
+- Families link to crops; crops link to cultivars; crop/cultivar pages link to their parents. Empty relationships have an explicit empty state.
+- Previous/Next uses the displayed list's order and filters captured when opened. Related child links start a sequence of those children. End buttons are disabled; saving a rename does not reorder the active sequence.
+- Back to catalogue returns to the originating category with its search, scroll and focus restored after refresh. Dirty navigation uses Save and leave, Discard and leave, or Stay.
+- Read-only users can follow all links; editing permissions and saved revisions are unchanged.
+- Bed and focused-area crop pickers support a family filter for both row and broadcast crops. Filtering does not save or replace a crop. A current crop outside the filter remains planted and is identified beside the picker until another crop is chosen. Saved catalogue references remain supported.
+- No new garden fields, database changes or family-only planting were introduced.
+
+Validation: all 359 tests and the production build pass. Isolated browser fixtures exercised linked browsing, sibling navigation, dirty-form recovery and family selection at 320×568, 390×844 and 1440×900 with no horizontal overflow or console errors. Catalogue writes in these checks were mocked; no live catalogue records were changed. The existing bundle-size warning remains.
+
+## Remove catalogue entries — 24 November 2026
+
+Administrators have Remove beside Edit for families, crops, cultivars, seed mixtures and mulch categories. Each action confirms the selected name and checks its loaded revision. Readers have no removal controls. Apply `202611240031_catalogue_removal_actions.sql` to enable the new operations; direct table deletes remain unavailable to clients.
+
+Families with crops or relationship references cannot be removed. Crops used by cultivars, seed mixtures or stored living materials must have those references updated first. Removing an otherwise unreferenced crop also removes its owned care, depths, relationships and calendar guidance; imported source records remain with their crop association cleared. Mixture removal also removes its component rows. Categories with stored materials or enabled living plants cannot be removed.
+
+Saved garden, activity and history snapshots remain unchanged. Removed seed mixtures remain visible as saved references in existing bed plans. Failed or stale requests keep the confirmation open with a recoverable error; duplicate submission and dismissal are blocked while pending.
+
+Validation: all 381 tests and the production build pass, including role revocation, stale requests, dependencies, atomic rollback and snapshot preservation. Browser fixtures checked confirmation, cancellation, removal and dependency messages at 320×568, 390×844 and 1440×900 without overflow. The new functions were installed in the connected database without deleting catalogue entries. The existing bundle-size warning remains.
+
+## Shared catalogue descriptions and living links — 24 November 2026
+
+Catalogue lists share one translated access message: administrators see “Shared across all gardens. You can add, edit and remove entries.”; readers see “Shared across all gardens. Catalogue administrators manage these entries.” Plant, mixture and inheritance guidance remains separate and appears only where relevant. Category forms omit cultivar-inheritance guidance.
+
+Living mulch opens the matching crop or cultivar with normal permissions and preserves the originating mulch-list context. Validation: all 385 tests and the production build pass; browser fixtures checked crop/cultivar links, return navigation and reader permissions at 320×568, 390×844 and 1440×900 without overflow. The existing bundle-size warning remains.
+
+The Work view contains dated tasks and completed records across accessible
+gardens, without changing the active editor. Seasonal guidance remains regional.
+Its explicit **Plan an activity** action only prefills a task form; saving a task
+and confirming its completion are separate actions. Calendar-profile grouped
+editing remains a later improvement. See [dated planning](activities.md).

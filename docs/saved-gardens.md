@@ -12,7 +12,11 @@ project used by `.env`: `202611160001_saved_gardens.sql`,
 `202611160012_bed_activities.sql`, `202611160013_open_work_plans.sql`, then
 `202611160014_plant_border_distance.sql`, `202611160015_editable_history.sql`,
 `202611170016_single_plan_history_deletion.sql`, and
-`202611170017_record_bed_changes.sql`.
+`202611170017_record_bed_changes.sql`. Apply the subsequent catalogue/area migrations
+in order, then `202611240032_delete_garden.sql` for garden deletion.
+`202611240033_area_minimum_clearances.sql` adds per-edge row-area validation;
+it can be applied independently of 032 after the preceding area migrations.
+Neither migration automatically runs with the frontend.
 Run each complete file in the Supabase SQL Editor or
 through the connected IDE database source using a database administrator account.
 The public browser key cannot apply migrations. Never put administrator
@@ -54,8 +58,8 @@ Duplicate names are allowed; gardens have independent IDs and layouts.
 
 Names, dimensions, bed additions, deletions and finished move/resize gestures
 save automatically. Pointer previews remain local until the gesture ends.
-A green dot in the header means saved; amber means pending or failed. Failed
-saves also show a message and a retry action. Switching gardens and signing out
+**Saving…** appears separately from the garden selector only while saving. Failed
+saves show a message and a retry action. Switching gardens and signing out
 wait for saves to finish and stay on the current garden if saving fails.
 Reloading loads the most recently updated garden. Selection and the copied-bed
 buffer remain temporary and reset when switching gardens.
@@ -73,7 +77,14 @@ Both the client and PostgreSQL validate the 5 cm grid, positive dimensions,
 garden boundaries, unique bed IDs and absence of overlaps. Row Level Security
 allows signed-in users to create their own gardens and read/update gardens they
 own or that have been shared with them. Anonymous access, owner/identity changes
-and client-supplied revisions are denied. Garden deletion is not implemented.
+and client-supplied revisions are denied. **More → Delete garden** is owner-only
+and requires confirmation. The operation waits for pending saves and checks the
+latest garden revision under a row lock. A stale revision requires reloading;
+failed requests retain the dialog for retry. Successful deletion clears the active
+editor and calendar, then offers remaining gardens or creation.
+Deletion permanently cascades to sharing, history, activities and their revisions.
+It cannot be undone. Only `delete_garden(uuid, bigint)` permits deletion; direct
+table DELETE remains denied. An already-deleted garden is a safe successful retry.
 See [sharing](sharing.md) for membership and owner-only access management.
 
 Updates match the last saved version. PostgreSQL increments it atomically.

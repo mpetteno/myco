@@ -9,9 +9,10 @@ import type { Bed, BedDetails } from './bed';
 type BedFormProps = {
   bed?: Bed;
   onSave: (details: BedDetails, wasSnapped: boolean) => string | null;
+  showHeading?: boolean;
 };
 
-export function BedForm({ bed, onSave }: BedFormProps) {
+export function BedForm({ bed, onSave, showHeading = true }: BedFormProps) {
   const [name, setName] = useState(bed?.name ?? '');
   const [width, setWidth] = useState(bed ? String(bed.widthCm) : '');
   const [length, setLength] = useState(bed ? String(bed.lengthCm) : '');
@@ -44,10 +45,9 @@ export function BedForm({ bed, onSave }: BedFormProps) {
   return (
     <form noValidate onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-1">
-        <h3 className="font-semibold">{bed ? 'Edit bed' : 'Add a bed'}</h3>
+        {showHeading && <h3 className="font-semibold">{bed ? 'Edit bed' : 'Add a bed'}</h3>}
         <p id="bed-help" className="text-sm leading-relaxed text-stone-600 dark:text-stone-400">
-          {bed ? 'Change this bed’s name or size. Its garden position stays fixed.' : 'New beds use the first free space in the garden.'}
-          {' '}Dimensions snap to the nearest 5 cm.
+          {bed ? 'Position stays fixed. ' : ''}Dimensions snap to 5 cm.
         </p>
       </div>
       <TextField id="bed-name" label="Name" required value={name}

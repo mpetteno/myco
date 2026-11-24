@@ -53,10 +53,14 @@ test('administrators add and edit types; failed writes preserve the form and all
   assert.match(document.body.textContent, /already exists/);
   assert.equal(document.getElementById('mulch-type-name').value, ' Straw ');
   globalThis.__mulchFixture.save = async () => {};
-  await click('Save mulch type'); await click('Edit Straw');
-  assert.equal(document.getElementById('mulch-type-notes').value, 'Dry material');
+  await click('Save mulch type');
+  assert.match(document.body.textContent, /Mulch type|Catalogue saved/);
+  assert.equal(document.getElementById('mulch-type-notes').value, ' Dry material ');
   await type('mulch-type-notes', 'Updated notes'); await click('Save mulch type');
-  assert.match(document.querySelector('li').textContent, /Updated notes/);
+  assert.equal(document.getElementById('mulch-type-notes').value, 'Updated notes');
+  await click('Back to catalogue');
+  await click('Edit Straw');
+  assert.equal(document.getElementById('mulch-type-notes').value, 'Updated notes');
   assert.equal(globalThis.__mulchFixture.writes.at(-1).current.version, 1);
 });
 
@@ -100,4 +104,16 @@ test('removal prevents duplicate submission and dismissal while the request is p
   await click('Removing…');await click('Cancel');
   assert.equal(globalThis.__mulchFixture.removals.length,1);
   await act(async()=>finish());assert.equal(document.querySelector('dialog'),null);
+});
+
+test('living mulch is shown without material-management controls and cannot be created manually', async () => {
+  await open({ isAdmin: true, categories: [{ id: 'organic', name: 'Organic mulch', code: 'organic' }, { id: 'living', name: 'Living mulch', code: 'living' }], types: [
+    { id: 'straw', name: 'paglia', notes: '', version: 1, categoryId: 'organic' },
+    { id: 'living:crop:basil', name: 'Basil', notes: '', version: 1, categoryId: 'living', categoryCode: 'living', plantTypeId: 'basil' },
+  ] });
+  const section = document.querySelector('section[aria-label="Living mulch"]'); assert.match(section.textContent, /Basil/);
+  assert.ok(button('Open crop Basil')); assert.equal(button('Edit Basil'), undefined); assert.equal(button('Remove Basil'), undefined); assert.ok(button('Edit paglia'));
+  await click('Add mulch type');
+  assert.deepEqual([...document.getElementById('mulch-category').options].map(option => option.value), ['', 'organic']);
+  assert.equal(document.getElementById('mulch-living-plant'), null);
 });

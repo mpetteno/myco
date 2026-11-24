@@ -7,7 +7,7 @@ categories share this dedicated page with phone, safe-area and dark-mode support
 There is one app-wide catalogue. Signed-in users can browse and search names
 and notes. The same administrators who manage the plant catalogue can add and
 edit mulch types. Garden ownership and sharing do not grant catalogue editing.
-The catalogue starts empty.
+Migration `202611240030_mulch_materials_and_depth_notes.sql` supplies seven organic materials (leaves, fieno, paglia, sfalci d’erba, cartone, corteccia, compost) and synthetic telo sintetico.
 
 Each type has a name (1–100 characters), optional notes (up to 2,000 characters),
 a stable ID and a revision. Names must be unique regardless of case or surrounding
@@ -76,7 +76,7 @@ an administrator edits them. Categories can be managed by selecting **Mulch cate
 page. Only catalogue administrators can manage either materials or
 categories; all signed-in users can browse and use eligible materials.
 
-Living materials reference a crop and optionally its cultivar. A crop must have
+Living materials are generated from the plant catalogue, with no Add/Edit/Remove controls here. They reference a crop and optionally its cultivar. A crop must have
 **Can be used as living mulch** enabled, or the selected cultivar must explicitly
 enable it. Cultivars otherwise inherit eligibility from their crop. Other material
 categories cannot reference plants; cultivar references must belong to their crop.
@@ -85,3 +85,20 @@ Disabling plant eligibility prevents newly applying that material. Existing laye
 and historical snapshots remain valid. The client filters unavailable materials,
 and the database independently checks newly applied layers during garden saves.
 A living layer is a material reference, without generated planting points or tasks.
+
+
+## Starter materials and depth-note cleanup — 24 November 2026
+
+Apply `202611240030_mulch_materials_and_depth_notes.sql` after earlier migrations. It adds only missing material names, preserves administrator edits, and backs up exact numeric depth-note duplicates before clearing them. It also validates flag-derived living layer IDs against the current catalogue in both unified and legacy plans. Existing saved layers and history retain their snapshots.
+
+Living choices use stable IDs based on crop/cultivar identity and are recomputed on catalogue load or refresh. Cultivar overrides take precedence over the crop flag; inherited eligibility is supported. Old manually created living rows remain saved references and are excluded from new choices.
+
+The connected database was updated on 24 November: eight materials added, 51 duplicate notes cleared, all 60 depths retained. The restricted backup table is `plant_depth_notes_backup_202611240030`. The targeted rollback in `supabase/rollbacks/202611240030_depth_notes.sql` restores only notes unchanged since cleanup.
+
+Validation: all 366 tests and the production build pass. Browser fixtures verified category groups, non-editable living entries, flag refresh and bed-layer selection at 320×568, 390×844 and 1440×900 with no overflow or console errors. The existing bundle-size warning remains.
+
+Material rows use the same compact layout and inline actions as Plants. Previous/Next browses the filtered material category; Back to catalogue restores search, scroll and focus. Unsaved edits retain Save/Discard/Stay protection, and saving keeps the current form open.
+
+## Living-plant links — 24 November 2026
+
+Each living entry has View plant, opening its crop or cultivar through the existing plant-detail navigation. Normal plant-catalogue permissions and unsaved-change protection apply. Back to catalogue restores mulch search, scroll and focus and reloads flag-derived choices after editing. If the entry is no longer eligible, focus returns to search. Living materials still have no independent Edit/Remove controls here.

@@ -3,7 +3,9 @@ export { monthInWindow } from '../catalogue-reference/calendarMonths';
 import { companionAdvice } from '../catalogue/catalogue';
 import type { Catalogue } from '../catalogue/catalogue';
 import { effectiveCalendar, effectiveGuidance } from '../catalogue-reference/referenceModel';
-import type { ReferenceData, RotationRule } from '../catalogue-reference/referenceModel';
+import type { ReferenceData } from '../catalogue-reference/referenceModel';
+import { rotationAdvice } from '../catalogue/rotationRules';
+export { rotationAdvice } from '../catalogue/rotationRules';
 import type { Bed, BedBounds } from '../beds/bed';
 import type { BedAreaPlan } from '../area-editor/areaPlan';
 import { defaultRowDirection, plantLabel, snapshotPlant } from '../planting/plantingPlan';
@@ -27,19 +29,6 @@ export type SuggestionResult = { candidates: PlantingSuggestion[]; current: Plan
   care: CareReference[]; notices: SuggestionReason[]; cover: boolean };
 
 
-
-export function rotationAdvice(current: PlantSnapshot, previous: PlantSnapshot, rules: RotationRule[]) {
-  const matches = (rule: RotationRule, prefix: 'current' | 'previous', plant: PlantSnapshot) => rule[`${prefix}_cultivar_id`]
-    ? rule[`${prefix}_cultivar_id`] === plant.cultivarId : rule[`${prefix}_plant_id`]
-      ? rule[`${prefix}_plant_id`] === plant.id : rule[`${prefix}_family_id`] === plant.familyId;
-  const score = (r: RotationRule) => (r.current_cultivar_id ? 3 : r.current_plant_id ? 1 : 0)
-    + (r.previous_cultivar_id ? 3 : r.previous_plant_id ? 1 : 0);
-  const matchesBoth = rules.filter((r) => matches(r, 'current', current) && matches(r, 'previous', previous));
-  const priority = Math.max(-1, ...matchesBoth.map(score));
-  const applicable = matchesBoth.filter((r) => score(r) === priority);
-  return { rules: applicable, relationship: applicable.some((r) => r.relationship === 'avoid_after') ? 'avoid_after'
-    : applicable.length ? 'favourable_after' : 'unknown' };
-}
 
 export function suggest(input: SuggestionInput): SuggestionResult {
   const { bed, plan, catalogue, references, location, date, history } = input;
@@ -73,21 +62,28 @@ export function suggest(input: SuggestionInput): SuggestionResult {
         values: { plant: plantLabel(plant), activity: String(e.activity), method: String(e.planting_method), notes: String(e.notes ?? '') }, sourceIds: [e.id] });
       if (!active.length) reasons.push({ code: season === 'outside' ? 'suggestions.outSeason' : season === 'unavailable' ? 'suggestions.unavailable' : 'suggestions.seasonUnknown',
         values: { plant: plantLabel(plant) }, sourceIds: planting.map((e) => e.id), caution: season === 'outside' || season === 'unavailable' });
-      if (references && history) {
-        for (const { observation } of preceding?.crops ?? []) {
-          const result = rotationAdvice(plant, observation.plant, references.rotation_rules);
-          if (result.relationship !== 'unknown') reasons.push({ code: result.relationship === 'avoid_after' ? 'suggestions.rotationAvoid' : 'suggestions.rotationGood',
-            values: { plant: plantLabel(observation.plant), notes: result.rules.map((r) => r.notes).filter(Boolean).join(' ') },
-            caution: result.relationship === 'avoid_after', sourceIds: [...result.rules.map((r) => r.id), observation.eventId] });
-        }
-        const years = Number(effectiveGuidance(references, plant.id, plant.cultivarId).rotation_years);
+      if (history) {
+        const intervalObservations = new Set<GroundObservation>();
+        const years = references ? Number(effectiveGuidance(references, plant.id, plant.cultivarId).rotation_years) : 0;
         if (years > 0) for (const observation of history) {
           if (observation.plant.familyId !== plant.familyId || !intersection(observation, target)) continue;
           // A still-recorded crop has no known removal date. For a closed
           // observation use the next checkpoint as a conservative upper bound.
           const bound = observation.endedAt ?? date;
           const anniversary = `${String(Number(bound.slice(0, 4)) + years).padStart(4, '0')}${bound.slice(4)}`;
-          if (anniversary > date) reasons.push({ code: 'suggestions.rotationInterval', values: { years, plant: plantLabel(observation.plant), date: observation.endedAt ?? observation.lastDate }, caution: true, sourceIds: [observation.eventId] });
+          if (anniversary > date) {
+            intervalObservations.add(observation);
+            reasons.push({ code: 'suggestions.rotationInterval', values: { years, plant: plantLabel(observation.plant), date: observation.endedAt ?? observation.lastDate }, caution: true, sourceIds: [observation.eventId] });
+          }
+        }
+        for (const { observation } of preceding?.crops ?? []) {
+          const result = rotationAdvice(plant, observation.plant, references?.rotation_rules ?? []);
+          if (result.automatic) {
+            if (!intervalObservations.has(observation)) reasons.push({ code: 'suggestions.rotationFamily',
+              values: { plant: plantLabel(observation.plant), family: plant.familyName || observation.plant.familyName }, caution: true, sourceIds: [observation.eventId] });
+          } else if (result.relationship !== 'unknown') reasons.push({ code: result.relationship === 'avoid_after' ? 'suggestions.rotationAvoid' : 'suggestions.rotationGood',
+            values: { plant: plantLabel(observation.plant), notes: result.rules.map((rule) => rule.notes).filter(Boolean).join(' ') },
+            caution: result.relationship === 'avoid_after', sourceIds: [...result.rules.map((rule) => rule.id), observation.eventId] });
         }
       }
       for (const area of plan.areas) {

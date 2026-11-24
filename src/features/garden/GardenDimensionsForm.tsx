@@ -40,12 +40,7 @@ export function GardenDimensionsForm({ onApply, dimensions }: GardenDimensionsFo
 
   return (
     <form noValidate onSubmit={handleSubmit} className="space-y-5">
-      <div className="space-y-1">
-        <h2 className="text-lg font-semibold">Garden dimensions</h2>
-        <p id="dimension-help" className="text-sm leading-relaxed text-stone-600 dark:text-stone-400">
-          Set the garden’s width and length. The view turns automatically to fit your screen. Values snap to the nearest 5 cm.
-        </p>
-      </div>
+      <p id="dimension-help" className="text-sm text-stone-600 dark:text-stone-400">Dimensions snap to 5 cm.</p>
       <NumberField id="garden-width" label="Width" min={GRID_SIZE_CM} step={GRID_SIZE_CM} required
         value={width} onChange={(event) => setWidth(event.target.value)}
         aria-describedby="dimension-help dimension-error" aria-invalid={error ? true : undefined} />

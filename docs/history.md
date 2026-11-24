@@ -1,7 +1,7 @@
 # Garden and bed history
 
 The current garden plan autosaves. Completed history is recorded explicitly.
-**History → Record garden changes** captures the whole implemented garden plan;
+**Calendar → Record garden changes** captures the whole implemented garden plan;
 **Record bed changes** confirms a selected bed. Date/title/notes are
 separate from the server's recording timestamp. Planning edits alone never
 create a completed event. Form headings and confirmation buttons use the same
@@ -10,14 +10,14 @@ shared [localization catalogue](localization.md).
 
 ## Add a backdated edit
 
-In garden **History**, select a calendar date and choose **Add past garden edit**.
+In garden **Calendar**, select a calendar date and choose **Add past garden edit**.
 This opens an independent historical draft with the normal garden and bed tools.
 Move/resize/add/delete beds, change garden dimensions or names, and open beds to
 edit planting areas and mulch. The permanent top bar identifies the historical
 draft. Choose **Save history record**, review the date, title and notes, then
 **Save record**.
 
-Inside a bed's **History**, choose **Add past bed edit**. It opens that bed's
+Inside a bed's **Calendar**, choose **Add past bed edit**. It opens that bed's
 historical editor. Planting, mulch, name and size changes update the draft.
 **Back to garden** lets you move or resize that bed in its historical context;
 other beds are protected. A new bed record merges only its target into the
@@ -60,19 +60,30 @@ The single current plan continues to autosave independently.
 
 ## Navigation
 
-The calendar marks completed records in green. Previous and next arrows visit
-individual events, including multiple records on one day. Calendar selection
-shows the last completed state on or before that day. Bed history includes
-its own records and garden layout records.
+Both editors open the shared Calendar panel on the right, or below the drawing
+on phones. It participates in the editor layout instead of overlaying the canvas. The garden includes all bed records; a bed includes its own records
+and garden-wide checkpoints. Completed records are green. Select a date to
+preview the latest recorded state on or before it, then choose an individual
+record in that day’s agenda. Same-day records remain separately selectable.
+Whole month and All dates broaden the list. Month arrows navigate months; record
+previous/next controls have been removed.
 
-Browsing snapshots is read-only. Editing requires opening a separate historical
-draft. **Plan** returns to the autosaved current layout; **Close history** also
-hides navigation. Dates do not shift with timezone conversion. Recording times
-use the device's locale. Historical snapshots never replace the current plan.
+Browsing snapshots is read-only. Editing requires a separate historical draft.
+Return to current plan restores the editable layout while keeping Calendar open;
+Close calendar also closes the panel. The mounted bed draft, incomplete fields,
+selection and undo state remain intact. Planned tasks open their details without
+changing the drawing. Open full calendar provides cross-garden Work browsing and
+Seasonal guidance; Back restores the original editor context.
+
+Dates stay date-only, independently of recording timestamps. Selecting a date
+before the first checkpoint shows no known historical state. A preview never
+replaces the current plan. Completed history remains available when dated-task storage is missing.
+Migration 034 is applied and verified on live Supabase as of 24 November 2026;
+dated planning is available after refreshing Calendar.
 
 ## Delete an entry
 
-Select an event in garden or bed History and choose **Delete history entry**.
+Select an event in garden or bed Calendar and choose **Delete history entry**.
 Review its title/date and confirm **Delete entry**. Cancellation leaves it intact.
 Deletion removes just that event from the timeline and calendar. Earlier states
 are shown until the next remaining checkpoint; later records retain their frozen
@@ -87,7 +98,8 @@ there is no restore interface yet. No other event is recalculated.
 
 ## Storage and access
 
-Apply migrations in order through `202611170017_record_bed_changes.sql`. Migration 015 adds record revisions,
+Editor history remains available through migration 033. Migration 034 enables
+dated tasks and is applied and verified on live Supabase (24 November 2026). Migration 015 adds record revisions,
 protected correction copies and `display_snapshot`. Existing bed scenes are
 materialized using the previous reconstruction rules without changing the
 original captured proposals or working gardens. New ordinary completion records
@@ -124,3 +136,25 @@ or completion retries. Direct browser mutations remain denied.
 Migration 017 adds `record_bed_changes`: new bed checkpoints use the general
 `bed` category and capture both planting and mulch from the saved plan. Earlier
 planting/mulch labels are preserved on existing records.
+
+## Combined Work calendar
+
+Editor **Calendar → Open full calendar → Work** combines planned tasks with this completed
+history. Task completion is an explicit, revision-checked transaction capturing
+the current saved garden or bed through the same recorders. It does not apply a
+proposed snapshot. **Open history** opens this inspector independently of the
+mounted editable garden. Its canvas stays read-only even when viewing Current
+plan; historical editing still requires a separate draft.
+
+A completion linked to a task appears once in Work. Corrections use the current
+history metadata. Soft deletion hides its history action but keeps the task
+completed, labelled as a removed linked record. Standalone deleted history is
+omitted. Seasonal guidance remains a separate Calendar view; see
+[dated tasks](activities.md).
+
+Planned work can retain a reviewed recap and Work to do checklist (migration 035,
+applied and verified on live Supabase, 24 November 2026). Checklist progress stays on the task, separate
+from explicit completion. Existing completion still captures the latest saved
+plan; it preserves the recap and every item’s checked state. Correcting or deleting
+linked history leaves these task instructions intact. The calendar groups
+selected-record corrections/deletion separately from recording new completed work.

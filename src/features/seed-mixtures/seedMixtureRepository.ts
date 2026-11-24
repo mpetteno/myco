@@ -14,13 +14,14 @@ export async function loadSeedMixtures(): Promise<SeedMixture[]> {
   return (mixtures.data ?? []).map((row) => ({ ...row, version: Number(row.version), components: (components.data ?? []).filter((item) => item.mixture_id === row.id)
     .map((item) => ({ plantTypeId: item.plant_type_id, cultivarId: item.cultivar_id, percentage: Number(item.weight_percent) })) }));
 }
-export async function saveSeedMixture(details: SeedMixtureDetails, current?: SeedMixture): Promise<void> {
+export async function saveSeedMixture(details: SeedMixtureDetails, current?: SeedMixture): Promise<string> {
   const problem = validateSeedMixture(details);
   if (problem) throw new GardenStorageError(problem);
-  const { error } = await getSupabaseClient().rpc('myco_save_seed_mixture', {
+  const { data, error } = await getSupabaseClient().rpc('myco_save_seed_mixture', {
     mixture_id: current?.id ?? null, expected_version: current?.version ?? null,
     details: { name: details.name.trim(), notes: details.notes.trim() },
     components: details.components.map((item) => ({ plant_type_id: item.plantTypeId, cultivar_id: item.cultivarId, weight_percent: item.percentage })),
   });
   if (error) throw catalogueError(error);
+  return data as string;
 }

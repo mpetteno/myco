@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GardenDocument, GardenSummary, SavedGarden } from './gardenDocument';
-import { createGarden, listGardens, loadGarden } from './gardenRepository';
+import { createGarden, deleteGarden, listGardens, loadGarden } from './gardenRepository';
 import { gardenStorageError } from './gardenErrors';
 
 export function useGardens(ownerId: string) {
@@ -10,8 +10,10 @@ export function useGardens(ownerId: string) {
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [editorVersion, setEditorVersion] = useState(0);
+  const deleted = useRef(new Set<string>());
 
   const remember = useCallback((garden: SavedGarden) => {
+    if (deleted.current.has(garden.id)) return;
     setGardens((current) => current.some((item) => item.id === garden.id)
       ? current.map((item) => item.id === garden.id ? garden : item) : [...current, garden]);
   }, []);
@@ -23,7 +25,7 @@ export function useGardens(ownerId: string) {
       try {
         const list = await listGardens();
         const garden = list.length ? await loadGarden(list[0].id) : null;
-        if (alive) { setGardens(list); setActive(garden); }
+        if (alive) { setGardens(list.filter((item) => !deleted.current.has(item.id))); setActive(garden && !deleted.current.has(garden.id) ? garden : null); }
       } catch (problem) { if (alive) setError(gardenStorageError(problem).message); }
       finally { if (alive) setLoading(false); }
     })();
@@ -38,8 +40,15 @@ export function useGardens(ownerId: string) {
     const garden = await createGarden(ownerId, document);
     remember(garden); setActive(garden);
   }
-  const refresh = useCallback(async () => { setGardens(await listGardens()); }, []);
+  async function remove(garden: SavedGarden) {
+    await deleteGarden(garden);
+    deleted.current.add(garden.id);
+    setGardens((current) => current.filter((item) => item.id !== garden.id));
+    setActive((current) => current?.id === garden.id ? null : current);
+    setEditorVersion((value) => value + 1);
+  }
+  const refresh = useCallback(async () => { setGardens((await listGardens()).filter((item) => !deleted.current.has(item.id))); }, []);
 
-  return { gardens, active, loading, error, editorVersion, remember, choose, create, refresh,
+  return { gardens, active, loading, error, editorVersion, remember, choose, create, remove, refresh,
     retry: () => setAttempt((value) => value + 1) };
 }

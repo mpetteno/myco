@@ -1,6 +1,8 @@
 import type { BedBounds } from '../beds/bed';
 import type { Catalogue, PlantType, PlantCultivar } from '../catalogue/catalogue';
 import { DEFAULT_BORDER_DISTANCE_CM, effectiveSpacing, effectiveCultivar, validateBorderDistanceCm } from '../catalogue/catalogue';
+import type { PlantClearances } from './plantClearances';
+import { validateClearances } from './plantClearances';
 
 export const LEGACY_PLANT_EDGE_CM = 15;
 export const FIXED_AREA_MARGIN_CM = 20;
@@ -12,7 +14,7 @@ export type RowDirection = 'width' | 'length';
 export type PlantSnapshot = { id: string; name: string; familyId: string; familyName: string;
   typeVersion: number; familyVersion: number; plantSpacingCm: number | null; rowSpacingCm: number | null; borderDistanceCm?: number; cultivarId?: string; cultivarName?: string; cultivarVersion?: number };
 export type PlantingArea = BedBounds & { id: string; plant: PlantSnapshot; plantSpacingCm: number;
-  rowSpacingCm: number; rowDirection?: RowDirection; rowCount?: number | null };
+  rowSpacingCm: number; rowDirection?: RowDirection; rowCount?: number | null; clearancesCm?: PlantClearances };
 export type PlantingAdvice = { firstAreaId: string; secondAreaId: string;
   relationship: 'companion' | 'caution' | 'unknown'; notes: string };
 export type BedPlantingPlan = { version: 1 | 2 | 3 | 4 | 5; rowDirection?: RowDirection; respectAreaSpacing: boolean;
@@ -61,6 +63,8 @@ export function validatePlantingPlan(value: unknown, size: { widthCm: number; le
       || ![plant.plantSpacingCm, plant.rowSpacingCm].every((n) => n === null || (Number.isFinite(n) && n > 0 && n <= Number.MAX_SAFE_INTEGER))) return 'Invalid saved plant reference.';
     if (['cultivarId', 'cultivarName', 'cultivarVersion'].some((key) => key in plant) && (typeof plant.cultivarId !== 'string' || !plant.cultivarId.trim() || plant.cultivarId.length > 128 || typeof plant.cultivarName !== 'string' || !plant.cultivarName.trim() || plant.cultivarName.length > 100 || !Number.isSafeInteger(plant.cultivarVersion) || plant.cultivarVersion! < 1)) return 'Invalid saved cultivar reference.';
     if ('borderDistanceCm' in plant && validateBorderDistanceCm(plant.borderDistanceCm!)) return 'Invalid saved plant border distance.';
+    const clearanceError = validateClearances(area, plan.version);
+    if (clearanceError) return clearanceError;
     if (plan.areas.some((other) => other && ids.has(other.id) && area.xCm < other.xCm + other.widthCm && area.xCm + area.widthCm > other.xCm
       && area.yCm < other.yCm + other.lengthCm && area.yCm + area.lengthCm > other.yCm)) return 'Planting areas cannot overlap.';
     ids.add(area.id);

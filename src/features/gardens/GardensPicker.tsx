@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '../../shared/ui/Button';
+import { BackButton } from '../../shared/ui/BackButton';
+import { usePageBackAction } from '../../shared/navigation/PageBackNavigation';
 import type { GardenDocument, GardenSummary } from './gardenDocument';
 import { GardenCreateForm } from './GardenCreateForm';
 import { gardenStorageError } from './gardenErrors';
@@ -12,10 +14,12 @@ type GardensPickerProps = {
   onPendingChange: (pending: boolean) => void;
   userId: string;
   onRefresh: () => Promise<void>;
+  onCreatingChange?: (creating: boolean) => void;
 };
 
-export function GardensPicker({ gardens, currentId, onChoose, onCreate, onPendingChange, userId, onRefresh }: GardensPickerProps) {
+export function GardensPicker({ gardens, currentId, onChoose, onCreate, onPendingChange, userId, onRefresh, onCreatingChange }: GardensPickerProps) {
   const [creating, setCreating] = useState(gardens.length === 0);
+  useLayoutEffect(() => { onCreatingChange?.(creating); }, [creating, onCreatingChange]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const busy = useRef(false);
@@ -41,9 +45,9 @@ export function GardensPicker({ gardens, currentId, onChoose, onCreate, onPendin
   if (refreshing) return <p role="status" className="text-sm">Refreshing gardens…</p>;
   if (creating) return (
     <div className="space-y-4">
+      {gardens.length > 0 && <CreateGardenBack disabled={pending} onBack={() => setCreating(false)} />}
       <p role="alert" className="text-sm text-red-700 empty:hidden dark:text-red-400">{error}</p>
       <GardenCreateForm onCreate={(document) => run(() => onCreate(document))} />
-      {gardens.length > 0 && <Button variant="secondary" disabled={pending} onClick={() => setCreating(false)}>Back to gardens</Button>}
     </div>
   );
   return (
@@ -62,4 +66,9 @@ export function GardensPicker({ gardens, currentId, onChoose, onCreate, onPendin
       <Button variant="secondary" disabled={pending} onClick={() => setAttempt((value) => value + 1)}>Refresh gardens</Button>
     </div>
   );
+}
+
+function CreateGardenBack({ onBack, disabled }: { onBack: () => void; disabled: boolean }) {
+  const inHeader = usePageBackAction({ label: 'Back to gardens', onClick: onBack, disabled });
+  return inHeader ? null : <BackButton label="Back to gardens" onClick={onBack} disabled={disabled} showLabel />;
 }

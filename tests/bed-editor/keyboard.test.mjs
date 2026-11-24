@@ -19,7 +19,7 @@ afterEach(async () => { if (root) await act(async () => root.unmount()); root = 
 after(() => { dom.window.close(); cleanupEditor(); });
 const selectedArea = () => globalThis.__editorCanvas.plan.areas.find(area => area.id === globalThis.__editorCanvas.selectedId);
 const button = label => [...document.querySelectorAll('button')].find(item => item.textContent.trim() === label || item.getAttribute('aria-label') === label);
-async function click(label) { const target = button(label); assert.ok(target, `Missing ${label}`); assert.equal(target.disabled, false); await act(async () => target.click()); }
+async function click(label) { if (label === 'Calendar' && !button(label)) await act(async()=>globalThis.__gardenCanvas.onSelectBed(null)); const target = button(label); assert.ok(target, `Missing ${label}`); assert.equal(target.disabled, false); await act(async () => target.click()); }
 async function key(value, modifiers = { ctrlKey: true }, target = window) {
   const event = new window.KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true, ...modifiers });
   await act(async () => target.dispatchEvent(event)); return event;
@@ -86,12 +86,13 @@ test('focused areas support copy/paste and the same undo/redo history as the bed
   await act(async () => globalThis.__editorCanvas.onOpenArea({ kind: 'planting', id: 'area-a' }));
   await key('c'); await key('v');
   const id = selectedArea().id;
-  assert.equal(globalThis.__editorCanvas.focus.id, id);
+  assert.equal(globalThis.__editorCanvas.selectedId, id);
+  assert.equal(globalThis.__editorCanvas.cameraCommand.targetId, 'area-a', 'paste leaves the camera alone');
   await key('z'); assert.equal(globalThis.__editorCanvas.plan.areas.length, 1);
   assert.ok(button('Back to garden'), 'removing the focused copy returns to the bed');
   await key('y'); assert.equal(globalThis.__editorCanvas.plan.areas.length, 2);
   await act(async () => globalThis.__editorCanvas.onOpenArea({ kind: 'planting', id }));
-  await click('← Back to bed'); await key('z'); assert.equal(globalThis.__editorCanvas.plan.areas.length, 1);
+  await click('Fit bed'); await key('z'); assert.equal(globalThis.__editorCanvas.plan.areas.length, 1);
 });
 
 test('an area can be copied to another bed without sharing nested mixture data or mulch IDs', async () => {
@@ -138,7 +139,7 @@ test('modal confirmations and read-only bed history block shortcuts in editors b
   await click('Areas'); await click('Clear area plan');
   assert.ok(document.querySelector('dialog[open]'));
   for (const shortcut of ['c', 'v', 'z', 'y']) assert.equal((await key(shortcut)).defaultPrevented, false);
-  await click('Keep areas'); await click('History');
+  await click('Keep areas'); await click('Calendar');await click([...document.querySelectorAll('[aria-label^="Work month"] button')].find(b=>b.getAttribute('aria-label')?.includes('activities')).getAttribute('aria-label'));
   for (const shortcut of ['c', 'v', 'z', 'y']) assert.equal((await key(shortcut)).defaultPrevented, false);
   assert.equal(globalThis.__editorFixture.saves.length, 0);
 });
@@ -159,7 +160,7 @@ test('historical drafts handle their own shortcuts without the current garden ed
   await open();
   await act(async () => globalThis.__gardenCanvas.onMoveBed(bed.id, { xCm: 50, yCm: 0 }));
   const saved = structuredClone(globalThis.__editorFixture.saves.at(-1));
-  await click('History'); await click('Add past garden edit'); await click('Select fixture bed');
+  await click('Calendar'); await click('Add past garden edit'); await click('Select fixture bed');
   await key('c'); await key('v'); assert.equal(globalThis.__gardenCanvas.beds.length, 2);
   await key('z'); assert.equal(globalThis.__gardenCanvas.beds.length, 1);
   await key('y'); assert.equal(globalThis.__gardenCanvas.beds.length, 2);

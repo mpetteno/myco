@@ -52,6 +52,19 @@ equally specific conflicting rules resolve to caution. Catalogue rotation
 intervals also check recent same-family observations. No default interval is
 invented when none is supplied.
 
+When no explicit rule matches a candidate and recorded predecessor, matching
+family IDs produce an automatic rotation caution. This is the same calculated
+own-family default shown in catalogue Avoid after. Explicit family/crop/cultivar
+rules take precedence, including favourable exceptions. Candidate families use
+current catalogue references; recorded evidence retains its saved family IDs.
+
+An applicable rotation-interval warning suppresses the duplicate automatic
+family caution for that observation. Explicit rule explanations and independent
+interval warnings remain visible together, so a favourable exception does not
+silence a rotation interval. Automatic cautions cite the real history event;
+they do not create synthetic stored rules or rewrite history. Missing history
+continues to mean unknown rather than safe rotation.
+
 ## Care and reliability
 
 Care sections show catalogue sunlight, feeding, watering, and planting-depth

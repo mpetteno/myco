@@ -27,7 +27,7 @@ export function BedRecap({ bed, editor }: { bed: Bed; editor: ReturnType<typeof 
       <section aria-label="Plants by type" className="space-y-2"><h3 className="font-semibold">Plants by type</h3>
         <ul className="space-y-2">{[...totals.entries()].sort(([, a], [, b]) => a.name.localeCompare(b.name)).map(([id, total]) => <li key={id} className="flex justify-between gap-3"><span>{total.name}</span><span>{total.plants} plants · {total.areas} {total.areas === 1 ? 'area' : 'areas'}</span></li>)}</ul>
       </section>
-      <section aria-label="Planting area recap" className="space-y-2"><h3 className="font-semibold">Plant rows</h3><PlantingSummary plan={rows} preview={preview} advice={advice} showLegacySpacingWarnings={false} /></section>
+      <section aria-label="Planting area recap" className="space-y-2"><h3 className="font-semibold">Plant rows</h3><PlantingSummary bed={bed} plan={rows} preview={preview} advice={advice} showLegacySpacingWarnings={false} /></section>
     </>}
     {draft.plan.areas.filter((area) => area.kind !== 'rows' || area.purpose === 'green_manure').map((area) => <div key={area.id} className="space-y-1 rounded-lg border border-stone-200 p-3 dark:border-stone-700">
       <p className="font-medium">{areaLabel(area)} · {formatArea(area.widthCm * area.lengthCm)}</p>

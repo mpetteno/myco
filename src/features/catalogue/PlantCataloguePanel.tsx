@@ -1,5 +1,10 @@
+import { CatalogueDescription } from './CatalogueDescription';
+import { removeCatalogueEntry } from './catalogueRemoval';
+import { CatalogueRemovalDialog } from './CatalogueRemovalDialog';
+import { useI18n } from '../../shared/i18n/I18nProvider';
 import { useDetailScroll } from '../../shared/hooks/useDetailScroll';
-import { CropGuidancePanel } from './CropGuidancePanel';
+import { PlantDetailNavigator } from './PlantDetailNavigator';
+import type { PlantDetailTarget } from './PlantDetailNavigator';
 import { useEffect, useState } from 'react';
 import { Button } from '../../shared/ui/Button';
 import { TextField } from '../../shared/ui/TextField';
@@ -12,23 +17,25 @@ import { PlantEntryForm } from './PlantEntryForm';
 import { CompanionRuleForm } from './CompanionRuleForm';
 
 export function PlantCataloguePanel({ userId, section, onEditingChange }: { userId: string; section: CatalogueSection; onEditingChange?: (editing: boolean) => void }) {
+  const { t } = useI18n();
+  const [removing, setRemoving] = useState<CatalogueSelection>();
   const [data, setData] = useState<Catalogue | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<{ current?: CatalogueSelection } | null>(null);
-  const [guidance, setGuidance] = useState<PlantType>();
+  const [detail, setDetail] = useState<{ target: PlantDetailTarget; siblings: PlantDetailTarget[] }>();
   const [guidanceEditing, setGuidanceEditing] = useState(false);
   const [message, setMessage] = useState('');
-  const detailScroll = useDetailScroll(!guidance && !loading);
+  const detailScroll = useDetailScroll(!detail && !editing && !loading);
   useEffect(() => {
-    onEditingChange?.(!!editing || guidanceEditing);
+    onEditingChange?.(!!editing || !!removing || guidanceEditing);
     return () => onEditingChange?.(false);
-  }, [editing, guidanceEditing, onEditingChange]);
+  }, [editing, removing, guidanceEditing, onEditingChange]);
   useEffect(() => {
     let alive = true;
-    setLoading(true); setError(''); setEditing(null);
+    setLoading(true); setError(''); setEditing(null); setRemoving(undefined);
     void loadCatalogue(userId).then((next) => { if (alive) setData(next); })
       .catch((problem) => { if (alive) setError(catalogueError(problem).message); })
       .finally(() => { if (alive) setLoading(false); });
@@ -40,7 +47,8 @@ export function PlantCataloguePanel({ userId, section, onEditingChange }: { user
     <Button onClick={() => setAttempt((value) => value + 1)}>Try again</Button>
   </div>;
 
-  if (guidance) return <CropGuidancePanel userId={userId} cropId={guidance.id} name={guidance.name} onEditingChange={setGuidanceEditing} onBack={() => { detailScroll.restore(); setGuidance(undefined); setEditing(null); setAttempt((value) => value + 1); }} />;
+  if (detail) return <PlantDetailNavigator userId={userId} initial={detail.target} siblings={detail.siblings} catalogue={data}
+    onEditingChange={setGuidanceEditing} onBack={() => { setLoading(true); detailScroll.restore(); setDetail(undefined); setEditing(null); setAttempt((value) => value + 1); }} />;
 
   function saved(key: 'families' | 'plants' | 'rules', entry: CatalogueSelection) {
     setData((current) => {
@@ -50,13 +58,13 @@ export function PlantCataloguePanel({ userId, section, onEditingChange }: { user
       if (key !== 'rules') next.sort((a, b) => ('name' in a ? a.name : '').localeCompare('name' in b ? b.name : ''));
       return { ...current, [key]: next } as Catalogue;
     });
-    setEditing(null); setMessage('Catalogue saved.');
+    setEditing({ current: entry }); setMessage('Catalogue saved.');
   }
-  if (editing && data.isAdmin) {
-    if (section === 'companions') return <CompanionRuleForm families={data.families} plants={data.plants} cultivars={data.cultivars}
+  if (editing) {
+    if (section === 'companions') return <CompanionRuleForm readOnly={!data.isAdmin} families={data.families} plants={data.plants} cultivars={data.cultivars}
       current={editing.current as CompanionRule | undefined} onCancel={() => setEditing(null)}
       onSave={async (details) => saved('rules', await saveRule(details, editing.current as CompanionRule | undefined))} />;
-    return <PlantEntryForm kind={section === 'families' ? 'family' : 'plant'} families={data.families}
+    return <PlantEntryForm readOnly={!data.isAdmin} kind={section === 'families' ? 'family' : 'plant'} families={data.families}
       current={editing.current as PlantFamily | PlantType | undefined} onCancel={() => setEditing(null)}
       onSave={async (details) => section === 'families'
         ? saved('families', await saveFamily(details, editing.current as PlantFamily | undefined))
@@ -64,12 +72,23 @@ export function PlantCataloguePanel({ userId, section, onEditingChange }: { user
   }
   const cannotAdd = section === 'plants' ? data.families.length === 0 : section === 'companions' && data.families.length + data.plants.length === 0;
   return <div className="space-y-4">
-    <p className="text-sm leading-relaxed text-stone-600 dark:text-stone-400">An app-wide reference catalogue. {data.isAdmin ? 'You are a catalogue administrator and can add or edit entries.' : 'Catalogue administrators manage these entries.'} Spacing and companion rules are recommendations; planning will allow exceptions.</p>
+    {data.isAdmin && removing && section !== 'companions' && <CatalogueRemovalDialog name={(removing as PlantFamily | PlantType).name} removesCropGuidance={section === 'plants'}
+      onCancel={() => setRemoving(undefined)} onRemove={() => removeCatalogueEntry(section === 'families' ? 'plant_family' : 'plant_type', removing)}
+      onRemoved={() => {
+        const key = section === 'families' ? 'families' : 'plants';
+        setData((current) => current && ({ ...current, [key]: current[key].filter((item) => item.id !== removing.id) }));
+        setRemoving(undefined); setMessage(t('catalogue.removed'));
+      }} />}
+    <CatalogueDescription isAdmin={data.isAdmin} />
+    <p className="text-sm leading-relaxed text-stone-600 dark:text-stone-400">{t('catalogue.planningGuidance')}</p>
     <TextField id="catalogue-search" label="Search catalogue" type="search" value={search} onChange={(event) => setSearch(event.target.value)} />
     {data.isAdmin && <Button disabled={cannotAdd} onClick={() => { setEditing({}); setMessage(''); }}>Add {section === 'families' ? 'family' : section === 'plants' ? 'crop' : 'companion rule'}</Button>}
     {data.isAdmin && cannotAdd && <p className="text-sm text-stone-600 dark:text-stone-400">Add a plant family first.</p>}
     <p role="status" className="text-sm text-green-800 empty:hidden dark:text-green-400">{message}</p>
-    <CatalogueEntries onGuidance={(crop) => { detailScroll.remember(); setGuidance(crop); }} data={data} section={section} search={search} onEdit={(current) => { setEditing({ current }); setMessage(''); }} />
+    <CatalogueEntries onRemove={section === 'companions' ? undefined : setRemoving} onOpen={section === 'companions' ? undefined : (entry, entries) => {
+      const target = (item: CatalogueSelection): PlantDetailTarget => ({ kind: section === 'families' ? 'family' : 'crop', id: item.id, name: (item as PlantFamily | PlantType).name });
+      detailScroll.remember(); setDetail({ target: target(entry), siblings: entries.map(target) });
+    }} data={data} section={section} search={search} onEdit={(current) => { setEditing({ current }); setMessage(''); }} />
     <Button variant="secondary" onClick={() => setAttempt((value) => value + 1)}>Refresh catalogue</Button>
   </div>;
 }

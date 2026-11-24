@@ -8,6 +8,7 @@ import type { BedPlantingPlan, PlantingArea, RowDirection } from './plantingPlan
 import { areaRowLayout } from './areaRowLayout';
 import type { GardenDimensions } from '../garden/garden';
 import { DEFAULT_AREA_ROWS } from './plantingPlan';
+import { PlantClearanceFields } from './PlantClearanceFields';
 
 type PlantingAreaFieldsProps = { area: PlantingArea; plan: BedPlantingPlan; bed: GardenDimensions; catalogue: Catalogue;
   onPlant: (id: string) => void; onChange: (values: Partial<PlantingArea>) => void };
@@ -35,5 +36,6 @@ export function PlantingAreaFields({ area, plan, bed, catalogue, onPlant, onChan
     {!manualRows && <NumberField id="planting-row-spacing" label="Between rows" min={0} step="any" required
       value={area.rowSpacingCm > 0 ? area.rowSpacingCm : ''} onChange={(event) => onChange({ rowSpacingCm: Number(event.target.value) })} />}
     {layout && !layout.error && layout.rows > 1 && area.plant.rowSpacingCm !== null && layout.rowStep < area.plant.rowSpacingCm && <p role="status" className="text-sm text-red-700 dark:text-red-400">! Row gaps reach {layout.rowStep} cm; the catalogue recommends {area.plant.rowSpacingCm} cm.</p>}
+    <PlantClearanceFields area={area} plan={plan} bed={bed} onChange={onChange} />
   </fieldset>;
 }

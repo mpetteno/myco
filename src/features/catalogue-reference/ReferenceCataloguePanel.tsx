@@ -1,7 +1,10 @@
+import { CatalogueDescription } from '../catalogue/CatalogueDescription';
+import { removeCatalogueEntry } from '../catalogue/catalogueRemoval';
+import { CatalogueEntryRow } from '../catalogue/CatalogueEntryRow';
 import { useDetailScroll } from '../../shared/hooks/useDetailScroll';
-import { formatWindows } from './calendarMonths';
 import { ReferenceForm } from './ReferenceForm';
-import { CropGuidancePanel } from '../catalogue/CropGuidancePanel';
+import { PlantDetailNavigator } from '../catalogue/PlantDetailNavigator';
+import type { PlantDetailTarget } from '../catalogue/PlantDetailNavigator';
 import { useEffect, useState } from 'react';
 import { Button } from '../../shared/ui/Button';
 import { TextField } from '../../shared/ui/TextField';
@@ -15,13 +18,13 @@ import { referenceSections, referenceTables } from './referenceModel';
 import type { Field, ReferenceData, ReferenceRow, ReferenceTable } from './referenceModel';
 
 export function ReferenceCataloguePanel({ userId, section: controlledSection, initialSection = 'plant_cultivars', onEditingChange }: { userId: string; section?: ReferenceTable; initialSection?: ReferenceTable; onEditingChange?: (editing: boolean) => void }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const text = (value: string) => referenceText(t, value);
   const [data, setData] = useState<ReferenceData>();
   const [selectedSection, setSection] = useState<ReferenceTable>(initialSection);
   const section = controlledSection ?? selectedSection;
   const [editing, setEditing] = useState<{ current?: ReferenceRow }>();
-  const [guidance, setGuidance] = useState<ReferenceRow>();
+  const [guidance, setGuidance] = useState<{ target: PlantDetailTarget; siblings: PlantDetailTarget[] }>();
   const [guidanceEditing, setGuidanceEditing] = useState(false);
   const [removing, setRemoving] = useState<ReferenceRow>();
   const [message, setMessage] = useState('');
@@ -40,8 +43,9 @@ export function ReferenceCataloguePanel({ userId, section: controlledSection, in
     return () => { alive = false; };
   }, [userId, attempt]);
   if (!data) return <div className="space-y-3"><p role={error ? 'alert' : 'status'}>{error || t('catalogue.loadingReference')}</p>{error && <Button onClick={() => setAttempt(attempt + 1)}>{t('catalogue.refresh')}</Button>}</div>;
-  if (guidance) return <CropGuidancePanel userId={userId} cropId={String(guidance.plant_type_id)} cultivarId={guidance.id} name={`${data.plant_types.find((row) => row.id === guidance.plant_type_id)?.name ?? ''} · ${guidance.name}`} onEditingChange={setGuidanceEditing} onBack={() => { detailScroll.restore(); setGuidance(undefined); setEditing(undefined); setAttempt(attempt + 1); }} />;
-  if (editing && data.isAdmin) return <ReferenceForm table={section} data={data} current={editing.current} onCancel={() => setEditing(undefined)} onSaved={() => { setEditing(undefined); setAttempt(attempt + 1); }} />;
+  if (guidance) return <PlantDetailNavigator userId={userId} initial={guidance.target} siblings={guidance.siblings} onEditingChange={setGuidanceEditing}
+    onBack={() => { setData(undefined); detailScroll.restore(); setGuidance(undefined); setEditing(undefined); setAttempt(attempt + 1); }} />;
+  if (editing && data.isAdmin) return <ReferenceForm table={section} data={data} current={editing.current} onCancel={() => setEditing(undefined)} onSaved={(row) => { setEditing({ current: row }); setData((current) => current && ({ ...current, [section]: [...current[section].filter((item) => item.id !== row.id), row] })); }} />;
   function fieldValue(field: Field, row: ReferenceRow): string {
     const value = row[field.key];
     if (field.reference) return String(data![field.reference].find((item) => item.id === value)?.name ?? text('Unknown'));
@@ -56,10 +60,13 @@ export function ReferenceCataloguePanel({ userId, section: controlledSection, in
   }
   const rows = data[section].filter((row) => referenceSections[section].fields.map((field) => fieldValue(field, row)).join(' ').toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
   return <div className="space-y-4">
-    {data.isAdmin && removing && <CatalogueRemovalDialog key={removing.id} name={String(removing.name)} removesGuidance
-      onCancel={() => setRemoving(undefined)} onRemove={() => removeCultivar(removing)} onRemoved={() => {
-        setRemoving(undefined); setMessage(t('catalogue.removed')); setAttempt(attempt + 1);
+    {data.isAdmin && removing && <CatalogueRemovalDialog key={removing.id} name={String(removing.name)} removesGuidance={section === 'plant_cultivars'}
+      onCancel={() => setRemoving(undefined)} onRemove={() => section === 'mulch_categories' ? removeCatalogueEntry('mulch_category', removing) : removeCultivar(removing)} onRemoved={() => {
+        setRemoving(undefined); setMessage(t('catalogue.removed'));
+        if (section === 'mulch_categories') setData((current) => current && ({ ...current, mulch_categories: current.mulch_categories.filter((item) => item.id !== removing.id) }));
+        else setAttempt(attempt + 1);
       }} />}
+    <CatalogueDescription isAdmin={data.isAdmin} />
     {!controlledSection && <SelectField id="reference-section" label={t('catalogue.section')} value={section} onChange={(e) => { setSection(e.target.value as ReferenceTable); setSearch(''); setMessage(''); }}>
       {referenceTables.map((table) => <option key={table} value={table}>{text(referenceSections[table].label)}</option>)}
     </SelectField>}
@@ -67,16 +74,16 @@ export function ReferenceCataloguePanel({ userId, section: controlledSection, in
     <TextField id="reference-search" label={t('catalogue.search')} type="search" value={search} onChange={(e) => setSearch(e.target.value)} />
     {data.isAdmin && <Button onClick={() => setEditing({})}>{t('catalogue.addEntry')}</Button>}
     <p role="status" className="text-sm text-green-800 empty:hidden dark:text-green-400">{message}</p>
-    <ul className="space-y-3">{rows.map((row) => <li key={row.id} className="space-y-2 rounded-lg border border-stone-200 p-3 dark:border-stone-700">
-      {section === 'plant_cultivars' && <h3 className="font-medium"><button type="button" className="cursor-pointer text-left text-green-800 underline underline-offset-4 dark:text-green-400" onClick={() => { detailScroll.remember(); setGuidance(row); }}>{String(row.name)}</button></h3>}
-      <dl className="text-sm">{referenceSections[section].fields.filter((field) => data.isAdmin || field.key !== 'code').map((field) => <div key={field.key} className="mb-1"><dt className="inline font-medium">{text(field.label)}: </dt><dd className="inline whitespace-pre-wrap">{fieldValue(field, row)}</dd></div>)}</dl>
-      {section === 'plant_calendar_entries' && <p className="text-sm">{t('catalogue.monthWindows')}: {formatWindows(data.calendar_windows.filter((window) => window.calendar_entry_id === row.id), locale) || t('catalogue.noWindows')}</p>}
-      {section === 'plant_cultivars' && <Button variant="secondary" onClick={() => { detailScroll.remember(); setGuidance(row); }}>{t('catalogue.viewDetails')}</Button>}
-      {data.isAdmin && section !== 'plant_cultivars' && <Button variant="secondary" onClick={() => setEditing({ current: row })}>{t('catalogue.edit')}</Button>}
-      {data.isAdmin && section === 'plant_cultivars' && <Button type="button" variant="danger"
+    <ul className="space-y-3">{rows.map((row) => <CatalogueEntryRow key={row.id} title={String(row.name ?? referenceSections[section].fields.filter((field) => field.key !== 'notes').slice(0, 2).map((field) => fieldValue(field, row)).join(' · '))} actions={<>
+      {section === 'plant_cultivars' ? <Button variant="secondary" data-detail-entry={row.id} onClick={() => {
+        const target = (item: ReferenceRow): PlantDetailTarget => ({ kind: 'cultivar', id: item.id, cropId: String(item.plant_type_id), name: String(item.name) });
+        detailScroll.remember(); setGuidance({ target: target(row), siblings: rows.map(target) });
+      }}>{data.isAdmin ? 'Edit' : 'View'}</Button>
+        : data.isAdmin && <Button variant="secondary" onClick={() => setEditing({ current: row })}>{t('catalogue.edit')}</Button>}
+      {data.isAdmin && ['plant_cultivars', 'mulch_categories'].includes(section) && <Button type="button" variant="danger"
         aria-label={t('catalogue.removeNamed', { name: String(row.name) })}
         onClick={() => { setRemoving(row); setMessage(''); }}>{t('catalogue.remove')}</Button>}
-    </li>)}</ul>
+    </>} />)}</ul>
     {!rows.length && <p>{t('catalogue.noEntries')}</p>}
     <Button variant="secondary" onClick={() => setAttempt(attempt + 1)}>{t('catalogue.refresh')}</Button>
   </div>;

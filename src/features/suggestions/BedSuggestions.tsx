@@ -8,7 +8,7 @@ import { plantLabel } from '../planting/plantingPlan';
 import type { useBedEditor } from '../bed-editor/useBedEditor';
 import type { SuggestionReason } from './suggestionEngine';
 
-export function BedSuggestions({ editor, summary = false }: { editor: ReturnType<typeof useBedEditor>; summary?: boolean }) {
+export function BedSuggestions({ editor, summary = false, onEditMulch }: { editor: ReturnType<typeof useBedEditor>; summary?: boolean; onEditMulch?: () => void }) {
   const advice = editor.suggestions;
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
@@ -42,7 +42,7 @@ export function BedSuggestions({ editor, summary = false }: { editor: ReturnType
       {reasons(result.notices)}
       {result.cover && <div className="space-y-2">
         <div>{t('suggestions.cover')}</div>
-        {!summary && editor.draft.selected && <Button variant="secondary" onClick={() => document.getElementById('area-mulch-controls')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })}>{t('suggestions.mulch')}</Button>}
+        {!summary && editor.draft.selected && <Button variant="secondary" onClick={onEditMulch ?? (() => document.getElementById('area-mulch-controls')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }))}>{t('suggestions.mulch')}</Button>}
       </div>}
       {!summary && result.current && <div className="space-y-1"><h4 className="font-medium">{t('suggestions.current')} · {result.current.label}</h4>{reasons(result.current.reasons)}</div>}
       {!summary && !editor.draft.selected && <div className="space-y-2"><div>{t('suggestions.chooseArea')}</div><Button variant="secondary" disabled={editor.leaving || editor.draft.loading || editor.draft.plan.areas.length >= MAX_AREAS} onClick={editor.draft.addArea}>{t('suggestions.add')}</Button></div>}

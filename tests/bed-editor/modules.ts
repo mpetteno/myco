@@ -7,3 +7,7 @@ export { AreaCanvasInfo } from '../../src/features/planting/AreaCanvasInfo';
 
 export { BedShape } from '../../src/features/beds/BedShape';
 export { PlantEntryForm } from '../../src/features/catalogue/PlantEntryForm';
+
+export { WorkspaceNavigation, useWorkspaceNavigation } from '../../src/shared/navigation/WorkspaceNavigation';
+
+export { CalendarHistoryView } from '../../src/features/work-calendar/CalendarHistoryView';

@@ -47,9 +47,23 @@ gaps share the remaining space. If they would fall below the plant type’s save
 minimum border distance (15 cm by default), rows move closer
 to keep that minimum. Rows remain on the 5 cm grid; compressed neighbouring gaps
 and opposite borders can differ by 5 cm. One row is
-centred. The controls show the resulting minimum/maximum gap, replacing the
+centred within the space left by the edge minimums. The controls show the resulting minimum/maximum gap, replacing the
 row-spacing input while a count is set. Too many rows for the physical grid
 show an error instead of silently reducing the count.
+
+**Area position & size** edits the area rectangle from the bed’s original
+top-left corner. **Plant clearances** separately edits four minimum gaps from
+that rectangle to plant centres. Top/Right/Bottom/Left follow the original bed
+axes through view rotation and changes in row direction. Inputs use 5 cm steps
+and cannot be below the saved crop minimum. Reset restores that saved default.
+Actual gaps appear beside the inputs and in the recap; balanced placement can
+leave larger gaps. Overrides stay in cm when areas or beds resize.
+
+For example, two lengthwise rows in a 100 cm wide area with a 40 cm target row
+gap normally sit at x = 30 and 70 cm. A 50 cm left minimum and 15 cm right
+minimum places them at x = 50 and 85 cm, with a 35 cm row gap. A smaller area
+must still fit both minimums and the chosen rows. Automatic mode recalculates
+the row count; spacing between individual plants remains the chosen spacing.
 
 Plant-type spacing inherits each missing distance from the family. Missing
 recommendations require a manually entered positive distance. The form shows
@@ -135,10 +149,11 @@ empty-row counts. Current plans place plants independently in each area.
 Selected areas show live measurements from their borders to the outer rows and
 row endpoints, plus representative row-to-row gaps centred along the rows,
 separate from the border guides. Normal measurements are
-blue; measurements below the corresponding catalogue recommendation are red
-and include an exclamation mark. Border recommendations use the saved plant-type
-minimum where present (legacy references retain their previous half-spacing
-measurements); row-gap recommendations use the full catalogue row spacing.
+blue; measurements below the applicable minimum or recommendation are red
+and include an exclamation mark. Format-5 border guides use effective per-edge
+minimums, with the saved crop default where no override exists. Older formats
+retain their original border recommendations. Row-gap recommendations use the
+full catalogue row spacing.
 Adjacent row guides also turn red when their gap is too small. The same warning
 appears in text above the drawing and in area controls. These are advisory:
 compressed rows remain applicable while margins and the physical grid fit.

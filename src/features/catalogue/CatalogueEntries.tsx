@@ -1,53 +1,33 @@
 import { useI18n } from '../../shared/i18n/I18nProvider';
+import { CatalogueEntryRow } from './CatalogueEntryRow';
 import type { ReactNode } from 'react';
 import { Button } from '../../shared/ui/Button';
-import { effectiveSpacing } from './catalogue';
-import type { Catalogue, CompanionRule, CompanionTarget, PlantFamily, PlantType, Spacing } from './catalogue';
+import type { Catalogue, CompanionRule, CompanionTarget, PlantFamily, PlantType } from './catalogue';
 
 export type CatalogueSection = 'families' | 'plants' | 'companions';
 export type CatalogueSelection = PlantFamily | PlantType | CompanionRule;
 type CatalogueEntriesProps = { data: Catalogue; section: CatalogueSection; search: string;
+  onRemove?: (entry: CatalogueSelection) => void;
+  onOpen?: (entry: CatalogueSelection, siblings: CatalogueSelection[]) => void;
   onEdit: (entry: CatalogueSelection) => void; onGuidance?: (entry: PlantType) => void };
 
-function Card({ title, notes, children, onEdit, onOpen }: { title: string; notes: string; children: ReactNode; onEdit?: () => void; onOpen?: () => void }) {
-  return <li className="space-y-2 rounded-lg border border-stone-200 p-3 dark:border-stone-700">
-    <h3 className="break-words font-medium">{onOpen ? <button type="button" className="cursor-pointer text-left text-green-800 underline underline-offset-4 dark:text-green-400" onClick={onOpen}>{title}</button> : title}</h3>
-    <div className="text-sm leading-relaxed text-stone-600 dark:text-stone-400">{children}</div>
-    {notes && <p className="whitespace-pre-wrap break-words text-sm text-stone-600 dark:text-stone-400">{notes}</p>}
-    {onEdit && <Button variant="secondary" onClick={onEdit} aria-label={`Edit ${title}`}>Edit</Button>}
-  </li>;
-}
-function SpacingSummary({ spacing }: { spacing: Spacing }) {
-  return <p>Between plants: {spacing.plantSpacingCm === null ? 'not set' : `${spacing.plantSpacingCm} cm`}<br />
-    Between rows: {spacing.rowSpacingCm === null ? 'not set' : `${spacing.rowSpacingCm} cm`}</p>;
-}
-
-export function CatalogueEntries({ data, section, search, onEdit, onGuidance }: CatalogueEntriesProps) {
+export function CatalogueEntries({ data, section, search, onEdit, onGuidance, onOpen, onRemove }: CatalogueEntriesProps) {
   const { t } = useI18n();
   const match = (text: string) => text.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase());
-  const edit = (entry: CatalogueSelection) => data.isAdmin ? () => onEdit(entry) : undefined;
+  const familyMatches = data.families.filter((item) => match(`${item.name} ${item.notes}`));
+  const cropMatches = data.plants.filter((item) => match(`${item.name} ${item.notes} ${item.scientificName ?? ''} ${data.families.find((family) => family.id === item.familyId)?.name ?? ''}`));
+  const card = (entry: CatalogueSelection, title: string, open = () => onEdit(entry)) => <CatalogueEntryRow key={entry.id} title={title}
+    actions={<><Button variant="secondary" data-detail-entry={entry.id} aria-label={`${data.isAdmin ? 'Edit' : 'View'} ${title}`} onClick={open}>{data.isAdmin ? 'Edit' : 'View'}</Button>
+      {data.isAdmin && onRemove && <Button type="button" variant="danger" aria-label={t('catalogue.removeNamed', { name: title })} onClick={() => onRemove(entry)}>{t('catalogue.remove')}</Button>}
+    </>} />;
   const targetName = (target: CompanionTarget) => target.kind === 'family'
     ? `${data.families.find((item) => item.id === target.id)?.name ?? 'Unknown family'} (family)`
     : target.kind === 'cultivar' ? `${data.cultivars?.find((item) => item.id === target.id)?.name ?? 'Unknown cultivar'} (cultivar)`
     : `${data.plants.find((item) => item.id === target.id)?.name ?? 'Unknown plant'} (plant type)`;
   let cards: ReactNode[];
-  if (section === 'families') cards = data.families.filter((item) => match(`${item.name} ${item.notes}`)).map((item) =>
-    <Card key={item.id} title={item.name} notes={item.notes} onEdit={edit(item)}><SpacingSummary spacing={item} /></Card>);
-  else if (section === 'plants') cards = data.plants.filter((item) => match(`${item.name} ${item.notes} ${item.scientificName ?? ''} ${data.families.find((family) => family.id === item.familyId)?.name ?? ''}`)).map((item) =>
-    <Card key={item.id} title={item.name} notes={item.notes} onOpen={onGuidance ? () => onGuidance(item) : undefined}>
-      <p className="mb-1 break-words">Family: {data.families.find((family) => family.id === item.familyId)?.name}</p>
-      {item.scientificName && <p>{item.scientificName}</p>}
-      {item.livingMulchEnabled && <p>{t('catalogue.livingEligible')}</p>}
-      <SpacingSummary spacing={effectiveSpacing(item, data.families)} />
-      {onGuidance && <Button variant="secondary" onClick={() => onGuidance(item)}>{t('catalogue.viewDetails')}</Button>}
-      <p>Minimum border distance: {item.borderDistanceCm} cm</p>
-      {(item.plantSpacingCm === null || item.rowSpacingCm === null) && <p className="mt-1 text-xs">Empty plant-type distances use family defaults where available.</p>}
-    </Card>);
-  else cards = data.rules.filter((item) => match(`${targetName(item.first)} ${targetName(item.second)} ${item.relationship} ${item.notes}`)).map((item) =>
-    <Card key={item.id} title={`${targetName(item.first)} + ${targetName(item.second)}`} notes={item.notes} onEdit={edit(item)}>
-      <p className={item.relationship === 'companion' ? 'text-green-800 dark:text-green-400' : 'text-amber-800 dark:text-amber-400'}>
-        {item.relationship === 'companion' ? 'Companion suggestion' : 'Caution / warning'}</p>
-    </Card>);
+  if (section === 'families') cards = familyMatches.map((item) => card(item, item.name, onOpen ? () => onOpen(item, familyMatches) : undefined));
+  else if (section === 'plants') cards = cropMatches.map((item) => card(item, item.name, onOpen ? () => onOpen(item, cropMatches) : onGuidance ? () => onGuidance(item) : undefined));
+  else cards = data.rules.filter((item) => match(`${targetName(item.first)} ${targetName(item.second)} ${item.relationship} ${item.notes}`)).map((item) => card(item, `${targetName(item.first)} + ${targetName(item.second)}`));
   return cards.length ? <ul className="space-y-3">{cards}</ul>
     : <p className="text-sm text-stone-600 dark:text-stone-400">{search ? 'No matching entries.' : 'No entries yet.'}</p>;
 }

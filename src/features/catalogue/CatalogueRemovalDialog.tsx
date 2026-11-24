@@ -4,8 +4,8 @@ import { Sheet } from '../../shared/ui/Sheet';
 import { useI18n } from '../../shared/i18n/I18nProvider';
 import { GardenStorageError } from '../gardens/gardenErrors';
 
-export function CatalogueRemovalDialog({ name, removesGuidance = false, onRemove, onRemoved, onCancel }: {
-  name: string; removesGuidance?: boolean; onRemove: () => Promise<void>; onRemoved: () => void; onCancel: () => void;
+export function CatalogueRemovalDialog({ name, removesGuidance = false, removesCropGuidance = false, onRemove, onRemoved, onCancel }: {
+  name: string; removesGuidance?: boolean; removesCropGuidance?: boolean; onRemove: () => Promise<void>; onRemoved: () => void; onCancel: () => void;
 }) {
   const { t } = useI18n();
   const [pending, setPending] = useState(false);
@@ -23,6 +23,7 @@ export function CatalogueRemovalDialog({ name, removesGuidance = false, onRemove
     <div className="space-y-4">
       <p>{t('catalogue.removeDescription')}</p>
       {removesGuidance && <p>{t('catalogue.removeCultivarGuidance')}</p>}
+      {removesCropGuidance && <p>{t('catalogue.removeCropGuidance')}</p>}
       <p role="alert" className="text-sm text-red-700 empty:hidden dark:text-red-400">{error}</p>
       <Button type="button" variant="danger" disabled={pending} onClick={() => void remove()}>{t(pending ? 'catalogue.removing' : 'catalogue.confirmRemove')}</Button>
       <Button type="button" variant="secondary" disabled={pending} onClick={onCancel}>{t('catalogue.cancelRemoval')}</Button>

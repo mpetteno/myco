@@ -63,3 +63,10 @@ export async function saveGardenLocation(current: SavedGarden, location: GardenL
   if (!data) throw new GardenStorageError('Garden changed; reload before changing its location.', true);
   return saved(data as Row);
 }
+
+export async function deleteGarden(current: SavedGarden): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('delete_garden', { p_garden_id: current.id, p_expected_version: current.version });
+  if (error?.code === '40001') throw new GardenStorageError('This garden changed in another session. Reload it before deleting.', true);
+  if (error?.code === '42501') throw new GardenStorageError('Only the garden owner can delete this garden.');
+  if (error) throw gardenStorageError(error);
+}

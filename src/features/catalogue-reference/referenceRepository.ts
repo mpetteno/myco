@@ -24,18 +24,19 @@ export async function loadReferenceData(userId: string): Promise<ReferenceData> 
   return { ...Object.fromEntries(tables.map((table, index) => [table, results[index]])), isAdmin: !!admin.data } as ReferenceData;
 }
 export async function saveReference(table: ReferenceTable, payload: Record<string, unknown>, current?: ReferenceRow,
-  windows?: { start_month: number; end_month: number }[]): Promise<void> {
+  windows?: { start_month: number; end_month: number }[]): Promise<ReferenceRow> {
   if (!referenceTables.includes(table)) throw new GardenStorageError('Unknown catalogue section.');
   const client = getSupabaseClient();
   if (table === 'plant_calendar_entries') {
-    const { error } = await client.rpc('myco_save_calendar_entry', { entry_id: current?.id ?? null, expected_version: current?.version ?? null, details: payload, windows: windows ?? [] });
+    const { data, error } = await client.rpc('myco_save_calendar_entry', { entry_id: current?.id ?? null, expected_version: current?.version ?? null, details: payload, windows: windows ?? [] });
     if (error) throw catalogueError(error);
-    return;
+    return data as ReferenceRow;
   }
   const query = client.from(table);
   const { data, error } = current
-    ? await query.update(payload).eq('id', current.id).eq('version', current.version).select('id').maybeSingle()
-    : await query.insert(payload).select('id').single();
+    ? await query.update(payload).eq('id', current.id).eq('version', current.version).select('*').maybeSingle()
+    : await query.insert(payload).select('*').single();
   if (error) throw catalogueError(error);
   if (!data) throw new GardenStorageError('This entry changed or administrator access was removed. Refresh before editing again.');
+  return data as ReferenceRow;
 }

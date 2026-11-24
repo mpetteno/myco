@@ -1,3 +1,4 @@
+import { EditHistoryActions } from '../../shared/ui/EditHistoryActions';
 import { WorkspaceNav } from '../../shared/navigation/WorkspaceNavigation';
 import { BedSuggestions } from '../suggestions/BedSuggestions';
 import { areaLabel } from './areaPlan';
@@ -5,6 +6,7 @@ import { ThemeToggle } from '../appearance/ThemeToggle';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { EditorScreen } from '../../shared/ui/EditorScreen';
+import { PageHeader } from '../../shared/ui/PageHeader';
 import { Button } from '../../shared/ui/Button';
 import type { Bed } from '../beds/bed';
 import type { useBedEditor } from '../bed-editor/useBedEditor';
@@ -21,16 +23,12 @@ export function AreaEditorPage({ gardenName, bed, editor, focus, onBack, feedbac
   const { draft } = editor;
   const area = draft.plan.areas.find((item) => item.id === focus.id);
   if (!area) return null;
-  return <EditorScreen feedback={feedback} header={<header className="flex min-h-14 shrink-0 items-center gap-2 border-b border-stone-200 bg-white px-3 dark:border-stone-800 dark:bg-stone-900">
-    <button type="button" onClick={onBack} className="min-h-11 shrink-0 cursor-pointer px-2 text-sm">← Back to bed</button>
-    <div className="min-w-0 flex-1 py-1">
-      <h1 ref={heading} tabIndex={-1} className="truncate font-semibold focus:outline-none">{areaLabel(area)}</h1>
-      <p className="truncate text-xs text-stone-600 dark:text-stone-400">{gardenName && `${gardenName} › `}{bed.name}</p>
-      {historyDraft ? <span className="text-xs text-stone-600 dark:text-stone-400">History draft · not recorded yet</span> : <PlanSaveStatus status={status} dirty={editor.dirty} />}
-    </div>
-    <button type="button" disabled={!editor.canUndo || status.conflict} onClick={editor.undo} className="min-h-11 cursor-pointer rounded-lg px-2 text-sm focus-visible:outline-2 focus-visible:outline-green-600 disabled:opacity-40">Undo</button>
+  return <EditorScreen feedback={feedback} header={<PageHeader title={areaLabel(area)} headingRef={heading}
+    back={{ label: 'Back to bed', onClick: () => { editor.setResizing(false); onBack(); } }} subtitle={<>{gardenName && `${gardenName} › `}{bed.name}</>}
+    status={historyDraft ? 'History draft' : <PlanSaveStatus status={status} dirty={editor.dirty} compact />} actions={<>
+    <EditHistoryActions canUndo={editor.canUndo} canRedo={editor.canRedo} onUndo={editor.undo} onRedo={editor.redo} disabled={!!status.conflict || editor.leaving} />
     <ThemeToggle /><WorkspaceNav />
-  </header>} toolbar={<footer className="shrink-0 border-t border-stone-200 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] dark:border-stone-800 dark:bg-stone-900">
+  </>} />} toolbar={<footer className="shrink-0 border-t border-stone-200 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] dark:border-stone-800 dark:bg-stone-900">
     <div className="flex gap-2">
       <div className="min-w-0 flex-1"><Button variant="secondary" aria-label="Zoom out" onClick={() => setZoom((value)=>Math.max(0.2,value/1.25))}>−</Button></div>
       <div className="min-w-0 flex-1"><Button variant="secondary" onClick={() => setZoom(0.8)}>Fit area</Button></div>
@@ -40,10 +38,11 @@ export function AreaEditorPage({ gardenName, bed, editor, focus, onBack, feedbac
   </footer>}>
     {(draft.error || editor.validation) && <p role="alert" className="shrink-0 p-3 text-sm text-red-700 dark:text-red-400">{draft.error || editor.validation}</p>}
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-      <div className="min-h-0 min-w-0 flex-1"><AreaPlanCanvas bed={bed} plan={draft.plan} selectedId={draft.selectedId} focus={focus} focusZoom={zoom}
+      <div className="min-h-0 min-w-0 flex-1"><AreaPlanCanvas bed={bed} plan={draft.plan} selectedId={draft.selectedId} resizing={editor.resizing && !status.conflict} focus={focus} focusZoom={zoom}
         onSelect={draft.setSelectedId} onBounds={draft.bounds} /></div>
       <aside aria-label="Area editor controls" className={`${controls ? 'block' : 'hidden'} max-h-[45%] min-h-0 shrink-0 space-y-4 overflow-y-auto border-t border-stone-200 bg-white p-4 focus-within:max-h-[80%] lg:block lg:max-h-none lg:focus-within:max-h-none lg:w-80 lg:border-t-0 lg:border-l dark:border-stone-800 dark:bg-stone-900`}>
         <h2 className="font-semibold">Area settings</h2>
+        <Button variant="secondary" aria-pressed={editor.resizing} disabled={!!status.conflict || editor.leaving} onClick={() => editor.setResizing(!editor.resizing)}>{editor.resizing ? 'Done resizing' : 'Resize area'}</Button>
         <AreaFields bed={bed} editor={editor} />
         <BedSuggestions editor={editor} />
       </aside>

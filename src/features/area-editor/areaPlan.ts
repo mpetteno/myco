@@ -87,6 +87,7 @@ export function validateAreaPlan(value: unknown, bed: GardenDimensions): string 
       || ![area.xCm, area.yCm, area.widthCm, area.lengthCm].every((n) => Number.isSafeInteger(n) && n % 5 === 0) || area.xCm < 0 || area.yCm < 0 || area.widthCm < 5 || area.lengthCm < 5) return 'Check area names, dimensions, purpose and grid positions.';
     if (plan.version >= 2 && area.kind === 'unplanted') return 'Choose Plant rows or Broadcast sowing for this area.';
     if (plan.version >= 2 && area.kind === 'rows' && area.purpose !== 'crop') return 'Plant rows are only available for Harvest crop.';
+    if ('clearancesCm' in area && area.clearancesCm !== undefined && (plan.version !== 5 || area.kind !== 'rows')) return 'Plant clearances apply to format-5 row areas only.';
     if (plan.version >= 3 && area.purpose === 'green_manure' && (area.kind !== 'broadcast' || area.sowing?.kind !== 'mixture' || !area.sowing.mixture.id)) return 'Choose a seed mixture for Green manure.';
     if (plan.version >= 4 && area.kind === 'broadcast') {
       if (area.purpose === 'crop' && (area.sowing?.kind !== 'crop' || !area.sowing.plant?.id)) return 'Choose a crop for Harvest crop. Seed mixtures are only available for Green manure.';

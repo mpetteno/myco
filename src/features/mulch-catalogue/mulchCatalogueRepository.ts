@@ -1,6 +1,6 @@
 import { loadCatalogue } from '../catalogue/catalogueRepository';
 import { removeCatalogueEntry } from '../catalogue/catalogueRemoval';
-import { materialAvailable } from './mulchCatalogue';
+import { livingMulchTypes, isLivingMulch } from './mulchCatalogue';
 import { getSupabaseClient } from '../../shared/supabase/client';
 import { GardenStorageError } from '../gardens/gardenErrors';
 import { mulchCatalogueError } from './mulchCatalogueErrors';
@@ -11,7 +11,10 @@ const columns = 'id,name,notes,version,category_id,plant_type_id,cultivar_id';
 type MulchRow = { id: string; name: string; notes: string; version: number; category_id?: string | null; plant_type_id?: string | null; cultivar_id?: string | null };
 const fromRow = (row: MulchRow): MulchType => ({ id: row.id, name: row.name, notes: row.notes, version: row.version, categoryId: row.category_id ?? null, plantTypeId: row.plant_type_id ?? null, cultivarId: row.cultivar_id ?? null });
 
-export const removeMulchType = (current: MulchType): Promise<void> => removeCatalogueEntry('mulch_type', current);
+export async function removeMulchType(current: MulchType): Promise<void> {
+  if (isLivingMulch(current) || current.plantTypeId) throw new GardenStorageError('Living mulch is managed from the plant catalogue.');
+  return removeCatalogueEntry('mulch_type', current);
+}
 
 export async function loadMulchCatalogue(userId: string): Promise<MulchCatalogue> {
   const client = getSupabaseClient();
@@ -25,10 +28,15 @@ export async function loadMulchCatalogue(userId: string): Promise<MulchCatalogue
   if (categoryResult.error) throw mulchCatalogueError(categoryResult.error);
   const plants = await loadCatalogue(userId);
   const categories = (categoryResult.data ?? []) as MulchCategory[];
-  return { types: (types.data as MulchRow[]).map(fromRow).map((type) => ({ ...type, categoryCode: categories.find((item) => item.id === type.categoryId)?.code, available: materialAvailable(type, categories, plants) })), categories, plants, isAdmin: !!admin.data };
+  const stored = (types.data as MulchRow[]).map(fromRow).map((type) => ({ ...type,
+    categoryCode: categories.find((item) => item.id === type.categoryId)?.code,
+    // Legacy living rows remain usable as saved references, never as independent catalogue choices.
+    available: !isLivingMulch(type, categories) }));
+  return { types: [...stored, ...livingMulchTypes(plants, categories)], categories, plants, isAdmin: !!admin.data };
 }
 
 export async function saveMulchType(details: MulchDetails, current?: MulchType): Promise<MulchType> {
+  if ((current && (isLivingMulch(current) || current.plantTypeId)) || details.plantTypeId || details.cultivarId) throw new GardenStorageError('Living mulch is managed from the plant catalogue.');
   const problem = validateMulchDetails(details);
   if (problem) throw new GardenStorageError(problem);
   const payload = { name: details.name.trim(), notes: details.notes.trim(), category_id: details.categoryId ?? null, plant_type_id: details.plantTypeId ?? null, cultivar_id: details.cultivarId ?? null };

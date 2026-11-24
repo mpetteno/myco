@@ -16,15 +16,16 @@ type BedResizeHandlesProps = {
   onPreview: (bed: Bed) => void;
   onCommit: (bed: Bed) => void;
   canResize?: (bed: Bed) => boolean;
+  onBlocked?: (message: string | null) => void;
 };
 
-export function BedResizeHandles({ bed, beds, garden, pixelsPerCm, onPreview, onCommit, canResize, dark = false }: BedResizeHandlesProps) {
+export function BedResizeHandles({ bed, beds, garden, pixelsPerCm, onPreview, onCommit, canResize, onBlocked, dark = false }: BedResizeHandlesProps) {
   const colors = canvasPalette(dark);
   const gesture = useRef({ original: bed, lastValid: bed });
 
-  function resize(node: Konva.Node, handle: ResizeHandle) {
+  function resize(node: Konva.Node, handle: ResizeHandle, reportBlocked = true) {
     const proposed = getResizedBed(gesture.current.original, handle,
-      { xCm: node.x(), yCm: node.y() }, garden, beds);
+      { xCm: node.x(), yCm: node.y() }, garden, beds, reportBlocked ? onBlocked : undefined);
     const resized = proposed && (!canResize || canResize(proposed)) ? proposed : gesture.current.lastValid;
     gesture.current.lastValid = resized;
     const position = getResizeHandlePosition(resized, handle);
@@ -47,7 +48,8 @@ export function BedResizeHandles({ bed, beds, garden, pixelsPerCm, onPreview, on
               onPreview(bed);
             }}
             onDragMove={(event) => resize(event.target, handle)}
-            onDragEnd={(event) => onCommit(resize(event.target, handle))} />
+            // Rejected moves restore the handle to valid bounds. Keep their explanation on drop.
+            onDragEnd={(event) => onCommit(resize(event.target, handle, false))} />
         );
       })}
     </>

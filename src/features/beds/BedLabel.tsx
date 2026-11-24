@@ -20,7 +20,7 @@ export function BedLabel({ bed, pixelsPerCm, dark }: BedLabelProps) {
     return { nameWidthPx, sizeWidthPx: context.measureText(size).width + 12 };
   }, [bed.name, size]);
   // A long name must not push the size badge beyond the drawing on phones.
-  // Keep the full name in the accessible bed list and selected-bed toolbar.
+  // Keep the full name in the accessible canvas description and selected-bed toolbar.
   const availablePx = Math.max(80, Math.max(bed.widthCm, bed.lengthCm) * pixelsPerCm - 12);
   const inline = availablePx >= measured.sizeWidthPx + 88;
   const nameWidthCm = Math.min(measured.nameWidthPx + 8, inline ? availablePx - measured.sizeWidthPx - 8 : availablePx) / pixelsPerCm;

@@ -22,3 +22,23 @@ export function snapshotMulchMaterial(material: MulchType): MulchType {
   const { available: _availability, ...snapshot } = material;
   return structuredClone(snapshot);
 }
+
+export function livingMulchTypes(plants: Catalogue, categories: MulchCategory[]): MulchType[] {
+  const category = categories.find((item) => item.code === 'living');
+  if (!category) return [];
+  const base = { notes: '', categoryId: category.id, categoryCode: 'living', available: true };
+  const crops: MulchType[] = plants.plants.filter((crop) => crop.livingMulchEnabled).map((crop) => ({ ...base,
+    id: `living:crop:${crop.id}`, name: crop.name, version: crop.version, plantTypeId: crop.id, cultivarId: null }));
+  const cultivars: MulchType[] = (plants.cultivars ?? []).flatMap((cultivar) => {
+    const crop = plants.plants.find((item) => item.id === cultivar.plantTypeId);
+    if (!crop || !effectiveCultivar(crop, cultivar).livingMulchEnabled) return [];
+    const fullName = `${crop.name} · ${cultivar.name}`;
+    const name = fullName.length <= 100 ? fullName : `${crop.name.slice(0, 47)}… · ${cultivar.name.slice(0, 48)}…`;
+    return [{ ...base, id: `living:cultivar:${cultivar.id}`, name, version: Math.max(crop.version, cultivar.version), plantTypeId: crop.id, cultivarId: cultivar.id }];
+  });
+  return [...crops, ...cultivars].sort((a, b) => a.name.localeCompare(b.name));
+}
+export function isLivingMulch(material: MulchType, categories: MulchCategory[] = []) {
+  return material.categoryCode === 'living' || material.id.startsWith('living:')
+    || categories.some((category) => category.id === material.categoryId && category.code === 'living');
+}

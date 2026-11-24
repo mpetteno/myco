@@ -10,7 +10,7 @@ Every area has a stable ID, rectangle in bed coordinates, purpose
 (`crop` or `green_manure`) and an ordered `mulch` array. Its planting `kind` is:
 
 - `rows`: a crop/cultivar snapshot, direction, chosen row count and spacing. Uses
-  the existing balanced row geometry and captured minimum border distance. Rows
+  balanced row geometry, the captured crop minimum and optional per-edge `clearancesCm`. Rows
   always use Harvest crop purpose.
 - `broadcast`: a crop/cultivar or mixture snapshot, density and density unit.
   Density always uses `g_m2` (grams per m²), for crops and mixtures. The editor
@@ -24,7 +24,7 @@ botanical hierarchy level. Seed mixtures are used only for Green manure.
 
 ## Editor
 
-Use **Add area**, then **Areas** or **Open area editor**. The controls share one
+Use **Add area**, then **Areas**. The controls share one
 **Purpose** selector first. For Harvest crop, the **Planting method** selector
 below it offers **Plant rows** or **Broadcast sowing**. Green manure uses broadcast
 sowing automatically and hides the method selector. Area names automatically
@@ -49,6 +49,37 @@ proportions are edited only in the shared catalogue; the area shows its captured
 composition and calculated weights. Refreshing references does not update saved
 snapshots; selecting a catalogue entry again adopts the current revision.
 
+**Focus area** or a desktop double-click enlarges an area within the bed page.
+Neighbouring areas remain visible and selectable. Use the mouse wheel, pinch,
+or **Zoom in / Zoom out** to zoom; wheel zoom follows the pointer and pinch
+follows the fingers. Enable **Pan** to drag the view with a mouse or one finger;
+two fingers can zoom and pan together. **Fit bed** restores the full bed.
+These view changes never save geometry or add undo steps.
+
+**Area position & size** edits the rectangle in bed coordinates. **Plant
+clearances** sets minimum distances from that rectangle’s edges to plant centres.
+Top, Right, Bottom and Left follow the bed axes regardless of view rotation or
+row direction. Each uses 5 cm increments and defaults to the saved crop minimum
+(15 cm for older snapshots). Overrides cannot go below that minimum.
+The controls show actual gaps, which may be larger after balanced placement.
+Reset clearances removes all overrides. Broadcast sowing still uses the full area.
+
+Optional format-5 row fields use `clearancesCm: { top?, right?, bottom?, left? }`
+in cm. Moving, resizing, splitting, copying and Undo preserve these values;
+resizing never scales them. Crop changes retain overrides and require correction
+if the new saved crop minimum is larger. Reference refresh keeps saved choices
+and clearances. Invalid edits remain drafts; the last valid plan stays saved.
+Apply `202611240033_area_minimum_clearances.sql` for matching storage validation.
+It changes validators without rewriting gardens or history and has no dependency
+on the separate garden-deletion migration 032.
+
+Desktop controls stay beside the canvas. Phone controls overlay it and close
+when focusing an area; **Edit selected area** reopens them. Selection, resize
+controls, measurement warnings and save feedback do not resize or recenter the
+canvas. Focused areas keep their camera during edits and resize previews.
+**Advice** opens Suggestions separately from Areas, Summary and bed Settings.
+Suggestions retain their planning date across panels and apply only when chosen.
+
 Mulch belongs to the area and has no independent rectangle. Zero to eight layers
 run bottom to top; deleting the final layer is allowed. The top layer renders
 across the area with 5 cm clearance around individual row plants. Broadcast
@@ -61,6 +92,13 @@ in a bed. Resizing rows must preserve their clearances and chosen row counts;
 broadcast areas can shrink to a 5 cm rectangle. Splitting copies
 content but creates independent area/layer IDs. Resizing changes seed quantity
 without changing density or mixture composition.
+
+Resizing a bed scales all its areas on the 5 cm grid, including their shared
+edges and attached mulch. Garden handles and numeric bed settings use the same
+rules. Plant snapshots, IDs, chosen row counts, spacing and sowing density stay
+unchanged; plant counts and seed quantities follow the resized areas. Resizing
+stops before an area loses the minimum space for its plants and chosen rows.
+The bed and area geometry save together and Undo/Redo restores the full snapshot.
 
 ## Persistence and history
 

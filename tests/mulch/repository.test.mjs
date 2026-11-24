@@ -68,3 +68,37 @@ test('removes mulch through the admin RPC with the loaded revision and reports f
     fixture(()=>({data:{code},status:400}));await assert.rejects(repository.removeMulchType(row),message);
   }
 });
+
+test('living choices derive automatically from flags, inherit cultivar eligibility and retain stable IDs', async () => {
+  const categories = [{ id: 'living', code: 'living', name: 'Living mulch', notes: '', version: 1 }];
+  const crop = { id: 'crop', name: 'Clover', familyId: 'family', notes: '', version: 2, plantSpacingCm: 10, rowSpacingCm: 20, borderDistanceCm: 15, livingMulchEnabled: true };
+  const cultivar = { id: 'cultivar', plantTypeId: 'crop', name: 'White', notes: '', version: 1, plantSpacingCm: null, rowSpacingCm: null, borderDistanceCm: null, livingMulchEnabled: null };
+  const plants = { families: [], plants: [crop], cultivars: [cultivar], rules: [], isAdmin: false };
+  let types = repository.livingMulchTypes(plants, categories);
+  assert.deepEqual(types.map(type => type.id), ['living:crop:crop', 'living:cultivar:cultivar']);
+  crop.name = 'Renamed'; assert.equal(repository.livingMulchTypes(plants, categories)[0].id, types[0].id);
+  cultivar.livingMulchEnabled = false; assert.equal(repository.livingMulchTypes(plants, categories).length, 1);
+  crop.livingMulchEnabled = false; cultivar.livingMulchEnabled = true;
+  assert.deepEqual(repository.livingMulchTypes(plants, categories).map(type => type.id), ['living:cultivar:cultivar']);
+  crop.name = 'x'.repeat(100); cultivar.name = 'y'.repeat(100);
+  assert.ok(repository.livingMulchTypes(plants, categories)[0].name.length <= 100);
+});
+
+test('repository refresh builds eligible living choices without manual rows and excludes legacy duplicates', async () => {
+  let enabled = true;
+  const requests = fixture(({ url }) => ({ data: url.pathname.endsWith('mulch_types')
+    ? [{ ...row, id: 'legacy-living', category_id: 'living', plant_type_id: 'crop' }]
+    : url.pathname.endsWith('mulch_categories') ? [{ id: 'living', code: 'living', name: 'Living', version: 1 }]
+    : url.pathname.endsWith('plant_types') ? [{ id: 'crop', name: 'Basil', notes: '', version: 1, family_id: 'family', living_mulch_enabled: enabled }]
+    : [] }));
+  let data = await repository.loadMulchCatalogue('reader');
+  assert.equal(data.types.find(item => item.id === 'legacy-living').available, false);
+  assert.deepEqual(data.types.filter(item => item.available).map(item => item.name), ['Basil']);
+  const living = data.types.find(item => item.available);
+  const count = requests.length;
+  await assert.rejects(repository.saveMulchType({ name: 'Changed', notes: '' }, living), /managed from the plant catalogue/);
+  await assert.rejects(repository.removeMulchType(living), /managed from the plant catalogue/);
+  assert.equal(requests.length, count);
+  enabled = false; data = await repository.loadMulchCatalogue('reader');
+  assert.equal(data.types.filter(item => item.available).length, 0);
+});

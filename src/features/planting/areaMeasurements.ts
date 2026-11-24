@@ -1,6 +1,7 @@
 import type { GardenDimensions } from '../garden/garden';
 import { areaRowLayout } from './areaRowLayout';
 import type { BedPlantingPlan, PlantingArea } from './plantingPlan';
+import { effectiveClearances } from './plantClearances';
 
 type PointCm = { xCm: number; yCm: number };
 export type AreaMeasurement = { id: string; kind: 'border' | 'row-gap'; distanceCm: number;
@@ -26,14 +27,20 @@ export function getAreaMeasurements(plan: BedPlantingPlan, area: PlantingArea, b
     : area.plant.plantSpacingCm === null ? null : area.plant.plantSpacingCm / 2;
   const near = alongOrigin + alongSize * 0.25, far = alongOrigin + alongSize * 0.75;
   const centre = alongOrigin + alongSize / 2;
-  add('row-start', 'border', point(near, acrossOrigin), point(near, firstRow), rowMargin);
-  add('row-end', 'border', point(far, lastRow), point(far, acrossOrigin + acrossSize), rowMargin);
+  const margins = effectiveClearances(area);
+  add('row-start', 'border', point(near, acrossOrigin), point(near, firstRow), plan.version === 5 ? alongWidth ? margins.top : margins.left : rowMargin);
+  add('row-end', 'border', point(far, lastRow), point(far, acrossOrigin + acrossSize), plan.version === 5 ? alongWidth ? margins.bottom : margins.right : rowMargin);
   const midRow = (firstRow + lastRow) / 2;
-  add('plant-start', 'border', point(alongOrigin, midRow), point(alongStart, midRow), plantMargin);
-  add('plant-end', 'border', point(lastPlant, midRow), point(alongOrigin + alongSize, midRow), plantMargin);
+  add('plant-start', 'border', point(alongOrigin, midRow), point(alongStart, midRow), plan.version === 5 ? alongWidth ? margins.left : margins.top : plantMargin);
+  add('plant-end', 'border', point(lastPlant, midRow), point(alongOrigin + alongSize, midRow), plan.version === 5 ? alongWidth ? margins.right : margins.bottom : plantMargin);
   for (let index = 1; index < rows; index++)
     add(`row-gap-${index}`, 'row-gap', point(centre, rowPosition(index - 1)), point(centre, rowPosition(index)), area.plant.rowSpacingCm);
   return measurements;
+}
+
+export function actualClearances(measurements: AreaMeasurement[], area: PlantingArea) {
+  const sides = area.rowDirection === 'width' ? ['top', 'bottom', 'left', 'right'] : ['left', 'right', 'top', 'bottom'];
+  return Object.fromEntries(['row-start', 'row-end', 'plant-start', 'plant-end'].map((id, index) => [sides[index], measurements.find((item) => item.id === id)?.distanceCm]));
 }
 
 export function visibleAreaMeasurements(all: AreaMeasurement[]): AreaMeasurement[] {

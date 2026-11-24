@@ -1,4 +1,5 @@
-import { areasFit, validateAreaPlan } from '../area-editor/areaPlan';
+import { validateAreaPlan } from '../area-editor/areaPlan';
+import { resizeBedContents } from '../beds/resizeBedContents';
 import { useUndoState } from '../../shared/hooks/useUndoState';
 import { bedsOverlap, findFreePosition, isInsideGarden } from '../beds/bed';
 import type { Bed, BedBounds, BedDetails, BedCopy, BedPlans } from '../beds/bed';
@@ -8,9 +9,8 @@ import { canResizeBed } from '../beds/bedResize';
 import { getPastedBed } from '../beds/bedOperations';
 import type { GardenDimensions } from './garden';
 import type { GardenDocument } from '../gardens/gardenDocument';
-import { plantingAreasFit } from '../planting/plantingPlan';
 import { previewPlanting } from '../planting/plantingGeometry';
-import { mulchAreasFit, validateMulchPlan } from '../mulch/mulchPlan';
+import { validateMulchPlan } from '../mulch/mulchPlan';
 
 export function useGardenLayout(initial: GardenDocument, onChange: (document: GardenDocument) => void) {
   const edits = useUndoState(initial);
@@ -32,15 +32,14 @@ export function useGardenLayout(initial: GardenDocument, onChange: (document: Ga
     return null;
   }
 
-  function saveBed(details: BedDetails, bedId?: string): string | null {
+  function saveBed(details: BedDetails, bedId?: string, onCreated?: (id: string) => void): string | null {
     const { dimensions, beds } = snapshot.current;
     const current = beds.find((bed) => bed.id === bedId);
 
     if (current) {
-      const updated: Bed = { ...current, ...details };
-      if (!areasFit(updated.areaPlan, updated)) return 'This size would put an area outside the bed. Resize or remove the area first.';
-      if (!plantingAreasFit(updated.plantingPlan, updated)) return 'This size would put a planting area outside the bed. Edit or clear its planting plan first.';
-      if (!mulchAreasFit(updated.mulchPlan, updated)) return 'This size would put a mulch area outside the bed. Resize or remove the mulch area first.';
+      const resized = resizeBedContents(current, { ...current, ...details });
+      if (resized.error) return resized.error;
+      const updated = { ...resized.bed, name: details.name };
       if (!isInsideGarden(updated, dimensions)) return 'This bed would extend outside the garden. Choose smaller dimensions.';
       if (beds.some((bed) => bed.id !== bedId && bedsOverlap(updated, bed))) {
         return 'This size would overlap another bed. Choose smaller dimensions.';
@@ -49,7 +48,9 @@ export function useGardenLayout(initial: GardenDocument, onChange: (document: Ga
     } else {
       const position = findFreePosition(details, dimensions, beds);
       if (!position) return 'No free space fits this bed. Choose smaller dimensions or enlarge the garden.';
-      setBeds([...beds, { ...details, ...position, id: nextId() }]);
+      const id = nextId();
+      setBeds([...beds, { ...details, ...position, id }]);
+      onCreated?.(id);
     }
     return null;
   }
@@ -68,8 +69,8 @@ export function useGardenLayout(initial: GardenDocument, onChange: (document: Ga
     const { dimensions, beds } = snapshot.current;
     setBeds(beds.map((bed) => {
       if (bed.id !== bedId) return bed;
-      const resized = { ...bed, xCm: bounds.xCm, yCm: bounds.yCm, widthCm: bounds.widthCm, lengthCm: bounds.lengthCm };
-      return canResizeBed(resized, dimensions, beds) ? resized : { ...bed };
+      const resized = resizeBedContents(bed, { xCm: bounds.xCm, yCm: bounds.yCm, widthCm: bounds.widthCm, lengthCm: bounds.lengthCm });
+      return !resized.error && canResizeBed(resized.bed, dimensions, beds) ? resized.bed : bed;
     }));
   }
   function positionBed(bedId: string, position: BedPosition): string | null {

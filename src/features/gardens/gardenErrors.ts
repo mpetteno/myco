@@ -7,7 +7,7 @@ export class GardenStorageError extends Error {
 export function gardenStorageError(error: unknown): GardenStorageError {
   if (error instanceof GardenStorageError) return error;
   const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
-  if (code === '42P01' || code === 'PGRST205' || code === 'PGRST204') {
+  if (code === '42P01' || code === 'PGRST205' || code === 'PGRST204' || code === 'PGRST202') {
     return new GardenStorageError('Garden storage is not available yet. Please contact the app owner.');
   }
   if (code === '42501') return new GardenStorageError('You do not have permission to access this garden.');

@@ -4,8 +4,10 @@ import type { BedPlantingPlan, PlantingAdvice } from './plantingPlan';
 import type { PlantingPreview } from './plantingGeometry';
 import { areaColor } from './PlantingMarks';
 import { formatArea } from '../../shared/units/area';
+import type { GardenDimensions } from '../garden/garden';
+import { actualClearances, getAreaMeasurements } from './areaMeasurements';
 
-export function PlantingSummary({ plan, preview, advice, showLegacySpacingWarnings = true }: { plan: BedPlantingPlan; preview: PlantingPreview; advice: PlantingAdvice[]; showLegacySpacingWarnings?: boolean }) {
+export function PlantingSummary({ plan, preview, advice, bed, showLegacySpacingWarnings = true }: { plan: BedPlantingPlan; preview: PlantingPreview; advice: PlantingAdvice[]; bed: GardenDimensions; showLegacySpacingWarnings?: boolean }) {
   const dark = useDarkMode();
   return <div className="space-y-3 text-sm">
     <p role="status" className="font-semibold">{preview.points.length} plants · {preview.counts.reduce((sum, count) => sum + count.rows, 0)} rows</p>
@@ -14,6 +16,7 @@ export function PlantingSummary({ plan, preview, advice, showLegacySpacingWarnin
         <span aria-hidden="true" className="mt-1 h-3 w-3 shrink-0 rounded-full border border-stone-500" style={{ backgroundColor: areaColor(index, dark) }} />
         <span className="min-w-0 break-words">Area {index + 1}: {plantLabel(area.plant)} · {preview.counts[index]?.plants ?? 0} plants in {preview.counts[index]?.rows ?? 0} rows{preview.counts[index]?.emptyRows ? ` (${preview.counts[index].emptyRows} empty)` : ''}
           <span className="block text-xs text-stone-600 dark:text-stone-400">{area.widthCm} × {area.lengthCm} cm · {formatArea(area.widthCm * area.lengthCm)}</span>
+          <span className="block text-xs text-stone-600 dark:text-stone-400">Actual clearances: {Object.entries(actualClearances(getAreaMeasurements(plan, area, bed), area)).map(([side, value]) => `${side} ${value === undefined ? '—' : `${value} cm`}`).join(' · ')}</span>
         </span>
       </li>)}
     </ul>

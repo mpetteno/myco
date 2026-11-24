@@ -5,12 +5,12 @@ import { useI18n } from '../../shared/i18n/I18nProvider';
 import { createRegionLocation, supportedRegions } from './gardenLocation';
 import type { GardenLocation } from './gardenLocation';
 
-export function GardenLocationFields({ value, onChange, disabled }: { value?: GardenLocation; onChange: (location: GardenLocation | undefined) => void; disabled?: boolean }) {
+export function GardenLocationFields({ value, onChange, disabled, showTitle = true }: { value?: GardenLocation; onChange: (location: GardenLocation | undefined) => void; disabled?: boolean; showTitle?: boolean }) {
   const { t } = useI18n();
   const [region, setRegion] = useState(value?.regionCode ?? '');
   const [city, setCity] = useState(value?.city ?? '');
-  return <fieldset className="space-y-3" disabled={disabled}>
-    <legend className="font-medium">{t('location.title')}</legend>
+  return <fieldset className="space-y-3" disabled={disabled} aria-label={!showTitle ? t('location.title') : undefined}>
+    {showTitle && <legend className="font-medium">{t('location.title')}</legend>}
     <SelectField id="garden-location-region" label={t('location.region')} required value={region}
       onChange={(event) => { setRegion(event.target.value); onChange(createRegionLocation(event.target.value, city)); }}>
       <option value="">{t('location.chooseRegion')}</option>

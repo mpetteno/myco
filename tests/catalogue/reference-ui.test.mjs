@@ -24,6 +24,7 @@ await writeFile(catalogueRepository, `
       plants:data.plant_types.map(row=>({...row,familyId:row.family_id,plantSpacingCm:row.plant_spacing_cm ?? null,rowSpacingCm:row.row_spacing_cm ?? null})),
       cultivars:data.plant_cultivars.map(row=>({...row,plantTypeId:row.plant_type_id,plantSpacingCm:row.plant_spacing_cm ?? null,rowSpacingCm:row.row_spacing_cm ?? null,borderDistanceCm:row.border_distance_cm ?? null,livingMulchEnabled:row.living_mulch_enabled ?? null})) };
   };
+  export const saveFamily=async()=>{};
   export const savePlant=async()=>{};
   export const saveRule=async()=>{};
 `);
@@ -54,7 +55,7 @@ test('readers browse cultivar guidance without management controls; admin errors
   assert.equal(button('Remove'),undefined);
   await act(async()=>root.unmount());root=null;
   await open(ReferenceCataloguePanel,{userId:'admin'},{...data,isAdmin:true});
-  await click('View details');await change('details-plant_spacing_cm','130');
+  await click('Edit');await change('details-plant_spacing_cm','130');
   globalThis.__referenceUI.error={code:'40001'};await click('Save');
   assert.match(document.body.textContent,/changed/);assert.equal(document.getElementById('details-plant_spacing_cm').value,'130');
   assert.equal(globalThis.__referenceUI.writes[0][4].details.row_spacing_cm,'');
@@ -69,7 +70,7 @@ test('cultivar removal is admin-only, reports living-mulch dependencies and is u
   await click('Remove');globalThis.__referenceUI.removeError='23503';await click('Remove from catalogue');
   assert.match(document.querySelector('dialog').textContent,/used by a living mulch type/);
   assert.equal(globalThis.__referenceUI.removals[0].id,'datterini');assert.equal(globalThis.__referenceUI.removals[0].version,4);
-  assert.ok(button('View details'));globalThis.__referenceUI.removeError=null;await click('Remove from catalogue');
+  assert.ok(button('Edit'));globalThis.__referenceUI.removeError=null;await click('Remove from catalogue');
   assert.equal(document.querySelector('dialog'),null);assert.equal(button('Remove'),undefined);
   assert.match(document.body.textContent,/Catalogue entry removed/);
   await change('reference-section','calendar_profiles');assert.ok(button('Edit'));assert.equal(button('Remove'),undefined);
